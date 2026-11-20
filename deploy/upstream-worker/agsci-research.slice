@@ -1,0 +1,10 @@
+[Unit]
+Description=Aggregate original-engine controller and container limits
+
+[Slice]
+CPUQuota=200%
+MemoryAccounting=yes
+MemoryMax=4G
+MemorySwapMax=0
+TasksAccounting=yes
+TasksMax=1024

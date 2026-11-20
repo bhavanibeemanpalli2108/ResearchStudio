@@ -17,6 +17,7 @@ __pycache__/
 venv/
 .env/
 .env.*
+!.env.example
 
 # Claude Code local settings
 .claude
@@ -82,3 +83,10 @@ outputs/
 
 # Harness-written sealed task runtime manifest (machine-specific, derived)
 .agentic_runtime.json
+
+# Local research platform metadata, checkpoints, caches and browser results
+.research-platform/
+.test-tmp*/
+.platform-wheel-check/
+test-results/
+playwright-report/

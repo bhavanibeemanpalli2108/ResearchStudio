@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,8 @@ if TYPE_CHECKING:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINIMUM_PYTHON = (3, 11)
+MINIMUM_NODE = (22, 18, 0)
+NODE_HINT = "Install native Node.js LTS >=22.18 with npm/npx; see docs/install.md#native-nodejs-in-ubuntuwsl. Open a new shell, then rerun agsci doctor."
 REQUIRED_TOOLS = ("git", "docker", "node", "npm", "npx")
 # Agent name -> binary a native run expects on PATH.
 AGENT_CLI_BINARIES: dict[str, str] = {
@@ -103,12 +106,13 @@ class Host:
     repo_root: Path = REPO_ROOT
     python_version: tuple[int, int, int] = sys.version_info[:3]
     python_executable: str = sys.executable
+    platform: str = sys.platform
 
 
 # --- host inventory -----------------------------------------------------------
 
 
-def _command(host: Host, argv: list[str]) -> tuple[int, str] | str:
+def _command(host: Host, argv: list[str], *, limit: int = 200) -> tuple[int, str] | str:
     """Run a command; return ``(returncode, first output line)`` or an error string."""
     try:
         completed = host.run(
@@ -126,7 +130,7 @@ def _command(host: Host, argv: list[str]) -> tuple[int, str] | str:
         return f"could not run {argv[0]}: {exc}"
     output = completed.stdout.strip() or completed.stderr.strip()
     first_line = output.splitlines()[0].strip() if output else ""
-    return completed.returncode, first_line[:200]
+    return completed.returncode, first_line[:limit]
 
 
 def _version_detail(host: Host, name: str, path: str) -> str:
@@ -148,7 +152,77 @@ def check_python(host: Host) -> CheckResult:
     return CheckResult("python", OK, detail)
 
 
+def _windows_tool_path(path: str) -> bool:
+    normalized = path.replace("\\", "/").lower()
+    return bool(
+        re.match(r"^[a-z]:/", normalized)
+        or re.match(r"^/mnt/[a-z]/", normalized)
+        or normalized.startswith("//")
+        or normalized.endswith((".exe", ".cmd", ".bat", ".ps1"))
+    )
+
+
+def check_node_tool(host: Host, name: str) -> CheckResult:
+    path = host.which(name)
+    if path is None:
+        return CheckResult(name, FAIL, "not found on PATH", NODE_HINT)
+    if host.platform == "linux" and _windows_tool_path(path):
+        return CheckResult(name, FAIL, f"Windows tool resolved inside Linux: {path}", NODE_HINT)
+    if name != "node":
+        # Linux scripts use their native shebang; on Windows use the cmd shim
+        # via cmd.exe since subprocess cannot directly execute npm.cmd.
+        argv = [path, "--version"]
+        if host.platform == "win32":
+            argv = ["cmd.exe", "/d", "/c", name + ".cmd", "--version"]
+        result = _command(host, argv)
+        if (
+            isinstance(result, str)
+            or result[0] != 0
+            or not re.fullmatch(r"\d+\.\d+\.\d+", result[1])
+        ):
+            return CheckResult(name, FAIL, f"{path}: cannot execute {name} --version", NODE_HINT)
+        return CheckResult(name, OK, f"{result[1]} ({path})")
+    result = _command(
+        host,
+        [
+            path,
+            "-p",
+            "JSON.stringify({platform:process.platform,version:process.version,execPath:process.execPath})",
+        ],
+        limit=4096,
+    )
+    if isinstance(result, str) or result[0] != 0:
+        return CheckResult(name, FAIL, f"{path}: cannot execute Node runtime probe", NODE_HINT)
+    try:
+        info = json.loads(result[1])
+        version = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", info["version"])
+        if version is None:
+            raise ValueError("invalid version")
+        parsed = tuple(int(part) for part in version.groups())
+        runtime_platform, executable = info["platform"], info["execPath"]
+        if not isinstance(executable, str) or not executable:
+            raise ValueError("invalid executable")
+    except (ValueError, TypeError, KeyError):
+        return CheckResult(name, FAIL, f"{path}: invalid Node runtime probe", NODE_HINT)
+    if runtime_platform != host.platform or (
+        host.platform == "linux" and _windows_tool_path(executable)
+    ):
+        return CheckResult(
+            name,
+            FAIL,
+            f"Expected native {host.platform} Node, got {runtime_platform}: {executable}",
+            NODE_HINT,
+        )
+    if parsed < MINIMUM_NODE:
+        return CheckResult(
+            name, FAIL, f"Node {info['version']} is unsupported; need >=22.18.0", NODE_HINT
+        )
+    return CheckResult(name, OK, f"{info['version']} native {runtime_platform} ({executable})")
+
+
 def check_tool(host: Host, name: str, *, required: bool, hint: str = "") -> CheckResult:
+    if name in {"node", "npm", "npx"}:
+        return check_node_tool(host, name)
     path = host.which(name)
     if path is None:
         return CheckResult(name, FAIL if required else WARN, "not found on PATH", hint=hint)
@@ -216,9 +290,7 @@ def check_gpus(host: Host) -> CheckResult:
     selector = host.environ.get("AGENT_CONTAINER_GPUS")
     devices = visible_gpus(host)
     if isinstance(devices, str):
-        return CheckResult(
-            name, WARN, devices, hint="only a CPU-only preset can run without GPUs"
-        )
+        return CheckResult(name, WARN, devices, hint="only a CPU-only preset can run without GPUs")
     if not devices:
         return CheckResult(name, WARN, "nvidia-smi reports no GPUs")
     detail = f"{len(devices)} visible"
@@ -561,7 +633,9 @@ def run_checks_for(host: Host, cfg: PipelineConfig) -> list[CheckResult]:
     results = [check_run_summary(cfg)]
     if cfg.container.enabled:
         results.append(
-            check_agent_image(host, cfg.container.image, network=cfg.container.network, required=True)
+            check_agent_image(
+                host, cfg.container.image, network=cfg.container.network, required=True
+            )
         )
         results.append(check_auth_root(cfg))
         results.append(check_env_file(host, cfg))

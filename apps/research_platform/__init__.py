@@ -1,0 +1,1 @@
+"""Research platform application shell."""

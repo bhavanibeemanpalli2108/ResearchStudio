@@ -82,7 +82,9 @@ def test_dispatch_usage_help_and_unknown_commands(capsys) -> None:
 # --- doctor -------------------------------------------------------------------
 
 
-def _completed(argv: list[str], stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess:
+def _completed(
+    argv: list[str], stdout: str = "", returncode: int = 0
+) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr="")
 
 
@@ -101,6 +103,15 @@ def _healthy_host(tmp_path: Path, *, missing: frozenset[str] = frozenset()) -> d
         return None if name in missing else f"/usr/bin/{name}"
 
     def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+        if argv[0] == "/usr/bin/node":
+            return _completed(
+                argv,
+                json.dumps(
+                    {"platform": "linux", "version": "v22.18.0", "execPath": "/usr/bin/node"}
+                ),
+            )
+        if argv[0] in {"/usr/bin/npm", "/usr/bin/npx"}:
+            return _completed(argv, "10.9.3")
         if argv[0] == "nvidia-smi":
             return _completed(argv, "GPU-aaaa\nGPU-bbbb\n")
         if argv[:2] == ["docker", "run"] and "nvidia-smi" in argv:
@@ -118,12 +129,15 @@ def _healthy_host(tmp_path: Path, *, missing: frozenset[str] = frozenset()) -> d
         repo_root=repo,
         python_version=(3, 11, 9),
         python_executable="/venv/bin/python",
+        platform="linux",
     )
 
 
 def _stub_repo_checks(monkeypatch) -> None:
     monkeypatch.setattr(
-        doctor, "check_pipeline_config", lambda host: doctor.CheckResult("pipeline config", "ok", "")
+        doctor,
+        "check_pipeline_config",
+        lambda host: doctor.CheckResult("pipeline config", "ok", ""),
     )
     monkeypatch.setattr(
         doctor, "check_temp_storage", lambda host: doctor.CheckResult("temporary storage", "ok", "")
@@ -199,7 +213,9 @@ def _run_config(**overrides: object):
     return load_pipeline_config([f"{key}={value}" for key, value in overrides.items()])
 
 
-def test_doctor_resolved_run_reads_overrides_like_run_and_fails_on_bad_override(monkeypatch, tmp_path, capsys):
+def test_doctor_resolved_run_reads_overrides_like_run_and_fails_on_bad_override(
+    monkeypatch, tmp_path, capsys
+):
     _stub_repo_checks(monkeypatch)
 
     # the resolved run reads task dir and overrides like `agsci run`
@@ -223,7 +239,9 @@ def test_doctor_resolved_run_reads_overrides_like_run_and_fails_on_bad_override(
     assert rc == 0, payload
 
     # a bad override is reported as a failed resolved run
-    rc = doctor.main(["--json", "examples/grpo", "nope.key=1"], host=_healthy_host(tmp_path / "bad"))
+    rc = doctor.main(
+        ["--json", "examples/grpo", "nope.key=1"], host=_healthy_host(tmp_path / "bad")
+    )
     payload = json.loads(capsys.readouterr().out)
     assert rc == 1
     resolved = next(check for check in payload["checks"] if check["name"] == "resolved run")
@@ -255,14 +273,22 @@ def test_doctor_required_gpus_compares_preset_count_selector_host_and_workers(tm
     assert ok.status == "ok" and "2 (1 x 2 workers)" in ok.detail
     three_workers = _run_config(**{"container.gpu_count": 1, "investigation.execution.workers": 3})
     short = doctor.check_required_gpus(host, three_workers)
-    assert short.status == "fail" and "3 (1 x 3 workers)" in short.detail and "reports 2" in short.detail
+    assert (
+        short.status == "fail"
+        and "3 (1 x 3 workers)" in short.detail
+        and "reports 2" in short.detail
+    )
     host.environ = {"AGENT_CONTAINER_GPUS": "device=GPU-aaaa"}
     mismatch = doctor.check_required_gpus(host, two_workers)
     assert mismatch.status == "fail" and "selects 1" in mismatch.detail
     host.environ = {}
-    downstream = _run_config(**{
-        "container.gpu_count": 1, "investigation.execution.workers": 3, "execution.phases": "paper",
-    })
+    downstream = _run_config(
+        **{
+            "container.gpu_count": 1,
+            "investigation.execution.workers": 3,
+            "execution.phases": "paper",
+        }
+    )
     assert doctor.check_required_gpus(host, downstream).status == "ok"
 
 
@@ -286,7 +312,9 @@ def _container_gpu_host(
     return host, docker_calls
 
 
-def test_doctor_container_gpus_runs_nvidia_smi_with_selector_and_only_in_container_mode(tmp_path) -> None:
+def test_doctor_container_gpus_runs_nvidia_smi_with_selector_and_only_in_container_mode(
+    tmp_path,
+) -> None:
     # runs nvidia-smi in the image with the derived selector
     host, docker_calls = _container_gpu_host(tmp_path / "derived", "GPU-bbbb\nGPU-aaaa\n")
     cfg = _run_config(**{"container.gpu_count": 2, "container.image": "agent:test"})
@@ -314,7 +342,9 @@ def test_doctor_container_gpus_runs_nvidia_smi_with_selector_and_only_in_contain
     assert names.index("container gpus") == names.index("required gpus") + 1
 
 
-def test_doctor_container_gpus_fails_on_mismatch_or_runtime_error_and_skips_without_prerequisites(tmp_path) -> None:
+def test_doctor_container_gpus_fails_on_mismatch_or_runtime_error_and_skips_without_prerequisites(
+    tmp_path,
+) -> None:
     # fails on a uuid mismatch or a runtime error
     cfg = _run_config(**{"container.gpu_count": 2})
     mismatch_host, _calls = _container_gpu_host(tmp_path / "mismatch", "GPU-aaaa\n")
@@ -331,7 +361,10 @@ def test_doctor_container_gpus_fails_on_mismatch_or_runtime_error_and_skips_with
     short = doctor.check_container_gpus(host, cfg)
     assert short.status == "warn" and "reports 2" in short.detail
     host.image_exists = lambda image: (False, "No such image")
-    assert doctor.check_container_gpus(host, _run_config(**{"container.gpu_count": 2})).status == "warn"
+    assert (
+        doctor.check_container_gpus(host, _run_config(**{"container.gpu_count": 2})).status
+        == "warn"
+    )
     cpu = _run_config(**{"container.gpu_count": 0})
     assert doctor.check_container_gpus(host, cpu).status == "ok"
     assert docker_calls == []
@@ -453,7 +486,9 @@ class _Inspector:
         launcher = tmp_path / "launcher.py"
         launcher.write_text("", encoding="utf-8")
 
-        def run(argv: list[str], cwd: Path | None = None, **_kwargs: object) -> subprocess.CompletedProcess:
+        def run(
+            argv: list[str], cwd: Path | None = None, **_kwargs: object
+        ) -> subprocess.CompletedProcess:
             self.calls.append((argv, cwd))
             return subprocess.CompletedProcess(argv, 0)
 
@@ -476,7 +511,9 @@ class _Inspector:
         )
 
 
-def test_inspect_build_installs_locked_dependencies_reuses_node_modules_and_requires_npm(tmp_path, capsys) -> None:
+def test_inspect_build_installs_locked_dependencies_reuses_node_modules_and_requires_npm(
+    tmp_path, capsys
+) -> None:
     # build installs locked dependencies then builds
     insp = _Inspector(tmp_path / "fresh")
     assert inspector.main(["build"], host=insp.host) == 0
@@ -499,12 +536,16 @@ def test_inspect_build_installs_locked_dependencies_reuses_node_modules_and_requ
     assert insp.calls == []
 
 
-def test_inspect_start_builds_serves_opens_and_honours_no_build_and_no_open(tmp_path, capsys) -> None:
+def test_inspect_start_builds_serves_opens_and_honours_no_build_and_no_open(
+    tmp_path, capsys
+) -> None:
     # start builds, serves and opens the page
     root = tmp_path / "start"
     insp = _Inspector(root)
     host = insp.host
-    assert inspector.main(["start", "--backend-port", "9000", "--results-root", "r"], host=host) == 0
+    assert (
+        inspector.main(["start", "--backend-port", "9000", "--results-root", "r"], host=host) == 0
+    )
     for thread in host.threads:
         thread.join(timeout=5)
     backend = next(call for call in insp.calls if call[0][0] == "/venv/bin/python")
@@ -544,7 +585,9 @@ def test_inspect_start_builds_serves_opens_and_honours_no_build_and_no_open(tmp_
 def test_inspect_dev_runs_reloading_backend_beside_vite_and_rejects_unknown_mode(tmp_path) -> None:
     # dev runs the reloading backend beside vite and stops it
     insp = _Inspector(tmp_path / "dev")
-    assert inspector.main(["dev", "--host", "0.0.0.0", "--frontend-port", "5174"], host=insp.host) == 0
+    assert (
+        inspector.main(["dev", "--host", "0.0.0.0", "--frontend-port", "5174"], host=insp.host) == 0
+    )
     popen_argv = insp.calls[1][0]
     assert popen_argv[0] == "popen"
     assert popen_argv[-2:] == ["--dev", "--reload"]
@@ -578,7 +621,9 @@ def test_review_validates_inputs_and_runs_the_reviewer_in_a_restricted_environme
         return 0
 
     base_env = {"HOME": "/home/user", "ANTHROPIC_API_KEY": "anthropic-secret"}
-    common = dict(environ=base_env, which=lambda name: "/usr/bin/uv", runner=runner, repo_root=repo_root)
+    common = dict(
+        environ=base_env, which=lambda name: "/usr/bin/uv", runner=runner, repo_root=repo_root
+    )
 
     # a missing PDF is a usage error
     assert review.main([str(tmp_path / "missing.pdf")], **common) == 2
@@ -625,7 +670,13 @@ def test_review_validates_inputs_and_runs_the_reviewer_in_a_restricted_environme
     other_env.write_text("OPENAI_API_KEY=other-secret\n", encoding="utf-8")
     assert review.main([str(pdf), "--env-file", str(other_env)], **common) == 0
     command, environment = calls[-1]
-    assert command == ["/usr/bin/uv", "run", "--script", str(repo_root / "src" / "aireview.py"), str(pdf)]
+    assert command == [
+        "/usr/bin/uv",
+        "run",
+        "--script",
+        str(repo_root / "src" / "aireview.py"),
+        str(pdf),
+    ]
     assert environment["OPENAI_API_KEY"] == "other-secret"
 
     # a host OPENAI_API_KEY wins over the env file and the runner's exit code is returned
@@ -633,3 +684,68 @@ def test_review_validates_inputs_and_runs_the_reviewer_in_a_restricted_environme
     assert review.main([str(pdf)], **{**common, "environ": host_env, "runner": lambda c, e: 4}) == 4
     assert review.main([str(pdf), "--env-file", str(tmp_path / "nope.env")], **common) == 2
     assert "env file not found" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("tool", ["node", "npm", "npx"])
+def test_doctor_missing_node_tool(tmp_path, tool):
+    host = _healthy_host(tmp_path, missing=frozenset({tool}))
+    result = doctor.check_node_tool(host, tool)
+    assert result.status == "fail" and "docs/install.md" in result.hint
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/mnt/c/Program Files/nodejs/node.exe",
+        "C:\\nodejs\\node.exe",
+        "/mnt/c/Program Files/nodejs/npm",
+        "/usr/bin/npx.cmd",
+    ],
+)
+def test_doctor_rejects_windows_node_tools_in_linux(tmp_path, path):
+    host = _healthy_host(tmp_path)
+    host.which = lambda name: path
+    assert doctor.check_node_tool(host, "node").status == "fail"
+
+
+@pytest.mark.parametrize(
+    "version,platform,executable,expected",
+    [
+        ("v20.19.0", "linux", "/usr/bin/node", "fail"),
+        ("v22.17.0", "linux", "/usr/bin/node", "fail"),
+        ("v22.18.0", "linux", "/usr/bin/node", "ok"),
+        ("v24.0.0", "linux", "/home/user/.nvm/bin/node", "ok"),
+        ("v22.18.0", "win32", "C:/nodejs/node.exe", "fail"),
+        ("v22.18.0", "linux", "/mnt/c/node.exe", "fail"),
+    ],
+)
+def test_doctor_validates_actual_node_runtime(tmp_path, version, platform, executable, expected):
+    host = _healthy_host(tmp_path)
+    host.run = lambda argv, **kw: _completed(
+        argv, json.dumps({"version": version, "platform": platform, "execPath": executable})
+    )
+    assert doctor.check_node_tool(host, "node").status == expected
+
+
+@pytest.mark.parametrize("tool", ["npm", "npx"])
+def test_doctor_does_not_accept_broken_package_manager(tmp_path, tool):
+    host = _healthy_host(tmp_path)
+    host.run = lambda argv, **kw: _completed(argv, "broken", returncode=1)
+    assert doctor.check_node_tool(host, tool).status == "fail"
+
+
+def test_doctor_accepts_native_windows_node(tmp_path):
+    host = _healthy_host(tmp_path)
+    host.platform = "win32"
+    host.which = lambda name: "C:/Program Files/nodejs/" + name + ".exe"
+    host.run = lambda argv, **kw: _completed(
+        argv,
+        json.dumps(
+            {
+                "version": "v26.13.1",
+                "platform": "win32",
+                "execPath": "C:/Program Files/nodejs/node.exe",
+            }
+        ),
+    )
+    assert doctor.check_node_tool(host, "node").status == "ok"

@@ -211,3 +211,59 @@ follow `autoillustrate doctor` if its CLI is not already on `PATH`.
 Set `AUTOILLUSTRATE_PREFIX` to use a prefix other than `~/.local` and
 `AUTOILLUSTRATE_VERSION` to install a release other than the image pin. The CLI
 creates its hashed Python environment on first use.
+
+
+## Native Node.js in Ubuntu/WSL
+
+Run these commands **inside Ubuntu**, not PowerShell. From PowerShell enter
+`wsl -d Ubuntu`, then use the existing checkout at
+`/mnt/d/project/reseon/AI-Scientist-v3`. Do not copy the project or reuse its
+Windows `.venv` as a Linux interpreter.
+
+Doctor requires Node **>=22.18.0**, matching the research platform requirement,
+the Node 22 agent image, and the optional Autoillustrate requirement (>=22).
+A Windows `npm`/`npx` under `/mnt/c` does not establish Linux readiness. Ubuntu's
+default apt Node package may be older than this requirement.
+
+If native Node is missing, the following optional, user-approved per-user setup
+uses [nvm's official installation instructions](https://github.com/nvm-sh/nvm#installing-and-updating).
+It downloads an installer and a Node 22 LTS binary; review the installer first.
+It does not need sudo or change Windows Node. If nvm is already installed,
+source it and skip downloading/running the installer. Do not reinstall an
+existing working toolchain.
+
+```bash
+curl -fsSLo /tmp/agsci-nvm-install.sh https://raw.githubusercontent.com/nvm-sh/nvm/v0.41.0/install.sh
+less /tmp/agsci-nvm-install.sh
+bash /tmp/agsci-nvm-install.sh
+export NVM_DIR="$HOME/.nvm"
+. "$NVM_DIR/nvm.sh"
+nvm install 22
+nvm use 22
+hash -r
+type -a node npm npx
+node -p 'JSON.stringify({platform:process.platform,version:process.version,execPath:process.execPath})'
+npm --version
+npx --version
+```
+
+The runtime probe must show `platform: linux`, Node >=22.18.0, and a Linux
+executable such as `$HOME/.nvm/versions/node/.../bin/node`. All three tools must
+resolve to Linux paths, with no `/mnt/c/...`, `.exe`, or `.cmd` tool selected.
+Load nvm in each shell before invoking the worker/CLI; the installer documents
+shell-profile setup. For a noninteractive shell explicitly source `nvm.sh`.
+No global Windows PATH or WSL configuration change is needed.
+
+Rerun from the **same existing checkout**, using an already configured Linux
+Python environment (or its absolute interpreter path):
+
+```bash
+cd /mnt/d/project/reseon/AI-Scientist-v3
+python -m src.agsci.main doctor --json
+# Equivalent when the existing Linux environment is activated:
+agsci doctor
+```
+
+Doctor verifies actual Node runtime platform/version/executable and runs npm/npx
+version probes. A healthy Node toolchain does not prove Docker daemon, agent
+image, credentials, or GPU readiness; those remain separate doctor results.

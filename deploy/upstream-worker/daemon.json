@@ -1,0 +1,13 @@
+{
+  "hosts": ["unix:///run/agsci-docker.sock"],
+  "data-root": "/var/lib/agsci-docker",
+  "exec-root": "/run/agsci-docker",
+  "pidfile": "/run/agsci-docker.pid",
+  "group": "agsci-worker",
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "cgroup-parent": "agsci-research.slice",
+  "live-restore": false,
+  "log-driver": "local",
+  "log-opts": {"max-size": "10m", "max-file": "2"},
+  "labels": ["org.agsci.role=dedicated-original-worker"]
+}

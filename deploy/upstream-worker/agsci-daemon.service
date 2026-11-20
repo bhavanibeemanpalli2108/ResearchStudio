@@ -1,0 +1,23 @@
+[Unit]
+Description=Dedicated original-engine Docker daemon (guest VM only)
+Requires=agsci-research.slice
+After=network.target agsci-research.slice
+ConditionVirtualization=!container
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/dockerd --config-file=/etc/agsci-worker/daemon.json
+Restart=on-failure
+RestartSec=5
+Delegate=yes
+KillMode=process
+TimeoutStopSec=45
+CPUQuota=100%
+MemoryMax=768M
+MemorySwapMax=0
+TasksMax=512
+UMask=0077
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

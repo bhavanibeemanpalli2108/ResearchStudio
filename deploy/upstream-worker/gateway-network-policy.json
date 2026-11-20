@@ -1,0 +1,14 @@
+{
+  "status": "prepared_not_deployed",
+  "enforcement_location": "trusted_qemu_host_outside_disposable_guest",
+  "qemu_user_network_restrict": true,
+  "guest_gateway_ip": "10.0.2.100",
+  "guest_gateway_tls_port": 8843,
+  "fixed_forward_target": "127.0.0.1:8843",
+  "management_ingress": "127.0.0.1:2222 -> guest:22",
+  "dns_egress": false,
+  "ipv4_ipv6_other_egress": false,
+  "direct_provider_egress": false,
+  "host_mounts_or_docker_socket": false,
+  "actual_vm_packet_tests_passed": false
+}

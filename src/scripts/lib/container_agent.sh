@@ -183,7 +183,7 @@ agent_provider_allowed_env_keys() {
       allowed_keys="CURSOR_API_KEY"
       ;;
     gemini)
-      allowed_keys="GEMINI_API_KEY GOOGLE_API_KEY"
+      allowed_keys="GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_GEMINI_BASE_URL"
       ;;
     pi|opencode)
       allowed_keys="PI_CODING_AGENT_PROVIDER PI_CODING_AGENT_MODEL PI_CODING_AGENT_MODELS"

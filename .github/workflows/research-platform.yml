@@ -1,0 +1,29 @@
+name: Research platform
+on:
+  push:
+    paths: ["src/research_platform/**", "apps/research_platform/**", "tests/research_platform/**", "pyproject.toml", "uv.lock", ".github/workflows/research-platform.yml"]
+  pull_request:
+    paths: ["src/research_platform/**", "apps/research_platform/**", "tests/research_platform/**", "pyproject.toml", "uv.lock", ".github/workflows/research-platform.yml"]
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - run: python -m pip install -e '.[platform]' pytest ruff mypy
+      - run: python -m ruff check src/research_platform apps/research_platform/backend tests/research_platform
+      - run: python -m ruff format --check src/research_platform apps/research_platform/backend tests/research_platform
+      - run: python -m mypy src/research_platform apps/research_platform/backend --follow-imports=silent
+      - run: python -m pytest tests/research_platform --confcutdir=tests/research_platform --basetemp=.test-tmp-platform -q
+      - run: python -m pytest tests/pipeline/test_agsci_cli.py tests/pipeline/test_run_inspector.py -q
+      - run: npm ci && npm run build && npm test
+        working-directory: apps/research_platform/frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/research_platform/frontend
+      - run: |
+          python -m src.research_platform.dev --no-frontend > /tmp/platform.log 2>&1 &
+          cd apps/research_platform/frontend
+          npm run test:e2e

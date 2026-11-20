@@ -47,6 +47,18 @@ Repository = "https://github.com/SakanaAI/AI-Scientist-v3"
 Issues = "https://github.com/SakanaAI/AI-Scientist-v3/issues"
 Paper = "https://arxiv.org/abs/2610.18933"
 
+[project.optional-dependencies]
+platform = [
+    "SQLAlchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "pydantic>=2.7,<3",
+    "python-dotenv>=1,<2",
+    "langgraph>=0.2.76,<2",
+    "langgraph-checkpoint-sqlite>=2,<4",
+    "langsmith>=0.3.45,<1",
+]
+postgres = ["psycopg[binary]>=3.2,<4"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",
@@ -70,7 +82,15 @@ packages = [
     "src.posthoc_pipeline",
     "src.final_evaluation",
     "src.task_drafting",
+    "src.research_platform",
+    "apps.research_platform",
+    "apps.research_platform.backend",
+    "apps.run_inspector",
+    "apps.run_inspector.backend",
 ]
+
+[tool.setuptools.package-data]
+"apps.research_platform.backend" = ["alembic.ini", "migrations/*.py", "migrations/versions/*.py"]
 
 [tool.ruff]
 line-length = 100

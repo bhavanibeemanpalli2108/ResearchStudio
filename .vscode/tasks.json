@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Research platform: local dev",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}/.venv/Scripts/python.exe" },
+      "args": ["-m", "src.research_platform.dev", "--port", "8001"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Research platform: backend tests",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}/.venv/Scripts/python.exe" },
+      "args": ["-m", "pytest", "tests/research_platform", "--confcutdir=tests/research_platform", "--basetemp=.test-tmp-platform", "-q"],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

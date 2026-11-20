@@ -307,6 +307,25 @@ modified. See [docs/pipeline.md](docs/pipeline.md) for the details.
 
 ## Documentation
 
+### Local research workspace
+
+A new optional React/FastAPI workspace adds persistent projects, budgeted model
+providers, an executable LangGraph workflow, human approvals, a durable worker,
+live progress, experiment artifacts, reports and optional redacted LangSmith traces.
+Start with a clearly labeled no-key demo. Native protocol-v2 research uses real
+Gemini, Groq or Ollama responses to prepare small regression or scheduling studies,
+approve frozen evaluation digests, generate code, and measure it in restricted
+Docker. The old fixed-benchmark genuine route is retired. See the
+[live research acceptance record](docs/RESEARCH_ENGINE_ACCEPTANCE.md) for measured
+results, tested scope and remaining original-engine blockers.
+Original-engine campaign launching stays with the existing trusted CLI; its
+results can be imported through the original Run Inspector parser.
+
+See [setup and profile limits](docs/RESEARCH_PLATFORM.md),
+[API reference](docs/RESEARCH_PLATFORM_API.md),
+[repository audit](docs/REPOSITORY_AUDIT.md) and
+[implementation/test report](docs/IMPLEMENTATION_REPORT.md).
+
 - [Installation](docs/install.md) — agent CLI, Headless runtime, Docker
   build options, credentials, container options, Autoillustrate.
 - [End-to-end pipeline](docs/pipeline.md) — `agsci run` recipes, presets,
