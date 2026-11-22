@@ -4,6 +4,8 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 import { CreatePage } from '../create';
+import { LiteraturePage, storeSelectedPapers, readSelectedPapers } from '../literature';
+import type { Paper } from '../literature';
 import { ApprovalModal, Markdown, RunPage, PaperView } from '../run';
 import { request, ApiError, numericMetrics } from '../api';
 import { approvalDigest, artifactText } from '../evidence';
@@ -447,5 +449,104 @@ describe('Terminal run evidence refresh', () => {
       client.setQueryData(['run', run.id], final);
     });
     await screen.findByRole('button', { name: 'Experiment 01' });
+  });
+});
+
+const scholarlyPaper: Paper = {
+  id: 'https://doi.org/10.1000/test',
+  selection_id: 'a'.repeat(64),
+  title: 'Source paper',
+  authors: ['Real Author'],
+  year: 2022,
+  doi: 'https://doi.org/10.1000/test',
+  url: 'https://doi.org/10.1000/test',
+  source: 'Crossref',
+  abstract: 'Deposited abstract only.',
+  abstract_source: 'Crossref',
+  abstract_truncated: false,
+  retrieved_at: '2026-11-20T00:00:00Z',
+  provenance: [
+    {
+      source: 'Crossref',
+      source_id: 'https://api.crossref.org/works/10.1000/test',
+      retrieved_at: '2026-11-20T00:00:00Z',
+    },
+  ],
+};
+describe('Scholarly literature', () => {
+  it('searches only on submission, displays source metadata and remembers explicit selection', async () => {
+    const fetcher = vi.fn(async () =>
+      response({
+        papers: [scholarlyPaper],
+        warnings: ['OpenAlex unavailable; Crossref results retained'],
+        cached: false,
+      }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    wrap(<LiteraturePage />);
+    expect(fetcher).not.toHaveBeenCalled();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Research topic or DOI'), 'scheduling');
+    await user.click(screen.getByRole('button', { name: 'Search literature' }));
+    await screen.findByRole('heading', { name: 'Source paper' });
+    expect(screen.getByText(/Real Author/)).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open original source' })).toHaveAttribute(
+      'href',
+      scholarlyPaper.url,
+    );
+    expect(screen.getByText(/Crossref results retained/)).toBeVisible();
+    await user.click(screen.getByRole('checkbox', { name: 'Select Source paper' }));
+    expect(readSelectedPapers()[0].selection_id).toBe(scholarlyPaper.selection_id);
+    expect(screen.getByRole('link', { name: 'Use selected papers in research' })).toHaveAttribute(
+      'href',
+      '/create?profile=free_research',
+    );
+    expect(fetcher.mock.calls.length).toBe(1);
+  });
+  it('handles source errors without invented results', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => response({ detail: 'Literature unavailable' }, 503)),
+    );
+    wrap(<LiteraturePage />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Research topic or DOI'), 'scheduling');
+    await user.click(screen.getByRole('button', { name: 'Search literature' }));
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('link', { name: 'Open original source' })).not.toBeInTheDocument();
+  });
+  it('passes only selected snapshot identifiers when creating native research', async () => {
+    storeSelectedPapers([scholarlyPaper]);
+    const fetcher = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input);
+      if (options?.method === 'POST' && path === '/api/projects')
+        return response({ id: 'project-selected' });
+      if (options?.method === 'POST' && path.endsWith('/runs'))
+        return response({ ...run, id: 'selected-run' });
+      if (path.includes('/models')) return response([{ id: 'openai/gpt-oss-20b' }]);
+      return response([{ id: 'groq', name: 'Groq', configured: true }]);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    wrap(<CreatePage />, ['/create?profile=free_research']);
+    const user = userEvent.setup();
+    expect(screen.getByText('Source paper')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Use example' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('option', { name: /gpt-oss-20b/ });
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Launch research' }));
+    await waitFor(() =>
+      expect(
+        fetcher.mock.calls.some(
+          ([url, options]) => String(url).endsWith('/runs') && options?.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+    const call = fetcher.mock.calls.find(
+      ([url, options]) => String(url).endsWith('/runs') && options?.method === 'POST',
+    );
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.selected_paper_ids).toEqual([scholarlyPaper.selection_id]);
+    expect(body.selected_literature).toBeUndefined();
   });
 });

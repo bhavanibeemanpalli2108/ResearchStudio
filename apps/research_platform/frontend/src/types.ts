@@ -121,6 +121,7 @@ export interface Traces {
   trace_url?: string;
 }
 export interface RunRequest {
+  selected_paper_ids?: string[];
   execution_protocol: 2;
   engine: 'native' | 'original';
   profile: string;

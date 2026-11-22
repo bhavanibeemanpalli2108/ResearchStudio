@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Dashboard, HistoryPage, SettingsPage } from './pages';
 import { CreatePage } from './create';
+import { LiteraturePage } from './literature';
 import { RunPage } from './run';
 import { Button, Modal, useTheme } from './ui';
 import { useProjects } from './hooks';
@@ -29,6 +30,7 @@ const navigation = [
   { to: '/history', label: 'Research projects', icon: BookOpen },
   { to: '/workspace', label: 'Live workspace', icon: Workflow },
   { to: '/ideas', label: 'Idea explorer', icon: Lightbulb },
+  { to: '/literature', label: 'Literature', icon: BookOpen },
   { to: '/experiments', label: 'Experiments', icon: FlaskConical },
   { to: '/analytics', label: 'Analytics', icon: Activity },
   { to: '/explainability', label: 'Explainability', icon: ShieldCheck },
@@ -147,6 +149,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/create" element={<CreatePage />} />
+            <Route path="/literature" element={<LiteraturePage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/projects/:projectId" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />

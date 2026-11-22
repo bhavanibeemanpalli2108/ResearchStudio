@@ -308,3 +308,36 @@ stopped afterwards. Local single-user native scope is usable. Remaining deployme
 billing-attestation, synthetic-science and dependency limits remain explicit.
 No source commit/tag created. Recommendation: reviewed commit followed by annotated
 local tag reseon-native-v1.0.0; see [checkpoint report](RESEARCH_STUDIO_V1.md).
+
+
+## Reseon v1.1 literature discovery — finalized 2026-11-22
+
+Preserved v1 with tree-identical checkpoint commit 66713db and annotated local tag
+reseon-native-v1.0.0 before implementation; no tracked local state or configured
+secrets found, no history rewritten or push performed. Extended the existing
+LiteratureClient/httpx boundary with public OpenAlex/Crossref retrieval, DOI/stable
+ID deduplication, genuine source abstracts, cache, bounded requests and rate-limit
+cooldowns. Added Literature navigation/page and explicit paper selection/review.
+
+New runs resolve selected snapshot IDs against server-side content hashes and
+retain metadata/provenance in existing config/state plus a source artifact/event.
+Selected context grounds the existing ideation stage without new retrieval; source
+text is untrusted and cannot establish findings or novelty. Optional retrieval
+outages preserve the existing native workflow. No database migration or framework.
+
+Recorded November 20 live retrieval: both public endpoints returned HTTP 200;
+five-result query had three abstracts; actual default browser query returned ten
+papers with six abstracts and no source warnings. Bounded to two scholarly GETs
+per uncached query; no keys, paid endpoints or model generation. Live queries were
+not repeated during the November 22 continuation.
+
+Final checks: Windows platform 206 passed/39 skipped/4 deselected; WSL 245 passed/
+4 deselected; frontend 19 passed; browser suite covers six journeys including
+selected citation provenance at the native ideation gate. Ruff/mypy, TypeScript,
+production build and formatting pass. Docker-executing tests were excluded; all
+external test responses and model/process boundaries are mocked.
+
+Completed evidence remains unchanged at 13/20 and 17/20 calls. Original Sakana
+campaign HTTP 409 remains. No generation, research campaign, VM or MCP integration
+was added. Details, exact files, usage and limitations:
+[LITERATURE_DISCOVERY_V1_1.md](LITERATURE_DISCOVERY_V1_1.md).

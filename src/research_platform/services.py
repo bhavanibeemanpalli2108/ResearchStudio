@@ -359,6 +359,21 @@ class ResearchServices:
 
     def literature(self, question: str) -> list[dict[str, Any]]:
         run = self.run_record()
+        selected = run["config"].get("selected_literature")
+        if selected:
+            self.emit(
+                "literature",
+                "selected_literature",
+                "Using explicitly selected source metadata; findings and novelty are unverified.",
+                {"paper_ids": [paper["id"] for paper in selected]},
+            )
+            self.save_artifact(
+                "selected-literature.json",
+                json.dumps(selected, ensure_ascii=False),
+                "application/json",
+                "literature",
+            )
+            return selected
         with self.trace("Literature discovery", "literature", {"profile": run["profile"]}):
             try:
                 return self.retrieval.search(question, demo=run["profile"] == "demo")

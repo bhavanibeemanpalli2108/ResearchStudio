@@ -214,4 +214,34 @@ def _native_report(state: Mapping[str, Any]) -> str:
         f"Report renderer: {REPORT_VERSION}. This is a read-only presentation of retained evidence; original state and immutable artifacts are not rewritten.",
         "Software attribution: Research Studio extends SakanaAI's Agentic Scientist (Apache-2.0), https://github.com/SakanaAI/AI-Scientist-v3; see CITATION.cff.",
     ]
+    selected = [
+        paper
+        for paper in state.get("literature", [])
+        if isinstance(paper, dict) and paper.get("selection") == "explicit_user_selection"
+    ]
+    if selected:
+        sections += [
+            "## Explicitly selected citation provenance",
+            "Metadata selection is not full-text validation or evidence of novelty.",
+            "```json\n"
+            + _json(
+                [
+                    {
+                        key: paper.get(key)
+                        for key in (
+                            "id",
+                            "doi",
+                            "title",
+                            "authors",
+                            "year",
+                            "selection_id",
+                            "retrieved_at",
+                            "provenance",
+                        )
+                    }
+                    for paper in selected
+                ]
+            )
+            + "\n```",
+        ]
     return "\n\n".join(sections) + "\n"

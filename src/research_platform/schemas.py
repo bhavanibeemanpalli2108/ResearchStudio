@@ -22,6 +22,11 @@ class ProjectCreate(StrictModel):
     references: list[str] = Field(default_factory=list, max_length=30)
 
 
+class LiteratureSearch(StrictModel):
+    query: str = Field(min_length=3, max_length=500)
+    limit: int = Field(default=10, ge=1, le=10)
+
+
 class Budgets(StrictModel):
     max_llm_calls: int = Field(default=20, ge=1, le=100)
     max_input_tokens: int = Field(default=32000, ge=128, le=250000)
@@ -51,9 +56,12 @@ class RunCreate(StrictModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     stage_models: dict[str, ModelSelection] = Field(default_factory=dict)
     fallback_models: list[ModelSelection] = Field(default_factory=list, max_length=3)
+    selected_paper_ids: list[str] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def validate_mode(self) -> RunCreate:
+        if self.profile != "free_research" and self.selected_paper_ids:
+            raise ValueError("Selected literature requires the native research profile")
         if self.profile == "free_research" and not self.require_approval:
             raise ValueError("Genuine dynamic experiments require digest-bound human approval")
         if self.engine == "original" and self.profile != "full_research":

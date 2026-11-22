@@ -31,7 +31,25 @@ def main():
         action="store_true",
         help="Stub external program boundary; no Docker/program execution",
     )
+    parser.add_argument("--mock-literature", action="store_true")
     args = parser.parse_args()
+    if args.mock_literature:
+        import httpx
+        from apps.research_platform.backend import app as api_module
+        from src.research_platform.literature import LiteratureClient
+        from test_literature import oa, cr
+
+        api_module.LiteratureClient = lambda cache: LiteratureClient(
+            cache,
+            client=httpx.Client(
+                transport=httpx.MockTransport(
+                    lambda req: httpx.Response(
+                        200, json=oa() if req.url.host == "api.openalex.org" else cr()
+                    )
+                )
+            ),
+            environ={},
+        )
     if args.offline_boundary:
         ResearchServices.dynamic_executor = lambda self: FixtureExecutor(
             fixture_root=self.settings.artifact_root.parent / "private-evaluations"

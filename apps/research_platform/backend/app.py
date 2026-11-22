@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.research_platform.artifacts import ArtifactStore
+from src.research_platform.literature import LiteratureClient, LiteratureError
 from src.research_platform.config import REPO_ROOT, Settings
 from src.research_platform.database import (
     Artifact,
@@ -44,6 +45,7 @@ from src.research_platform.schemas import (
     RunCreate,
     RunResponse,
     UpstreamImport,
+    LiteratureSearch,
 )
 from src.research_platform.scientist_adapter import ScientistAdapter
 from src.research_platform.services import TERMINAL, record_event, refresh_usage, usage_summary
@@ -231,6 +233,14 @@ def create_app(settings: Settings | None = None, *, database: Database | None = 
         finally:
             router.close()
 
+    @app.post("/api/literature/search")
+    def discover_literature(payload: LiteratureSearch):
+        library = LiteratureClient(settings.artifact_root.parent / "literature-cache")
+        try:
+            return library.discover(payload.query, payload.limit)
+        finally:
+            library.close()
+
     @app.get("/api/projects", response_model=list[ProjectResponse])
     def projects():
         with db.sessions() as session:
@@ -288,6 +298,15 @@ def create_app(settings: Settings | None = None, *, database: Database | None = 
                     "message": adapter.capabilities()["full"]["reason"],
                 },
             )
+        selected = []
+        if payload.selected_paper_ids:
+            library = LiteratureClient(settings.artifact_root.parent / "literature-cache")
+            try:
+                selected = library.resolve_selected(payload.selected_paper_ids)
+            except LiteratureError as error:
+                raise HTTPException(422, str(error)) from None
+            finally:
+                library.close()
         with db.sessions.begin() as session:
             if session.get(Project, project_id) is None:
                 raise HTTPException(404, "Project not found")
@@ -296,7 +315,10 @@ def create_app(settings: Settings | None = None, *, database: Database | None = 
                 profile=payload.profile,
                 provider=payload.provider,
                 model=payload.model,
-                config=payload.model_dump(),
+                config={
+                    **payload.model_dump(),
+                    **({"selected_literature": selected} if selected else {}),
+                },
             )
             session.add(run)
             session.flush()

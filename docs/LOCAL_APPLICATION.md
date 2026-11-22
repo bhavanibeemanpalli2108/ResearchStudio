@@ -1,5 +1,9 @@
 # Reseon — local native Research Studio v1
 
+Literature discovery: http://127.0.0.1:5180/literature. Search OpenAlex/Crossref,
+select papers and review their attachment to a new native task. Searching does
+not start generation. See [v1.1 instructions and verification](LITERATURE_DISCOVERY_V1_1.md).
+
 Current checkpoint: [v1 verification and release recommendation](RESEARCH_STUDIO_V1.md).
 
 ## v1 report presentation and operation

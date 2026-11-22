@@ -15,6 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { api, label } from './api';
+import { readSelectedPapers, storeSelectedPapers } from './literature';
 import { Badge, Button, ErrorNotice, PageHeading, Panel } from './ui';
 import type { Budget, Project, RunRequest } from './types';
 const demoQuestion =
@@ -56,6 +57,7 @@ export function CreatePage() {
   const [constraints, setConstraints] = useState('');
   const [validation, setValidation] = useState('');
   const [savedProject, setSavedProject] = useState<Project>();
+  const [selectedPapers, setSelectedPapers] = useState(readSelectedPapers);
   const existing = useQuery({
     queryKey: ['project', params.get('project')],
     queryFn: () => api.project(params.get('project')!),
@@ -101,6 +103,9 @@ export function CreatePage() {
         generate_report: generateReport,
         require_approval: profile !== 'demo' || requireApproval,
         constraints: constraints ? { user_instructions: constraints } : {},
+        ...(profile === 'free_research' && selectedPapers.length
+          ? { selected_paper_ids: selectedPapers.map((p) => p.selection_id!) }
+          : {}),
       };
       return api.createRun(project.id, request);
     },
@@ -178,6 +183,29 @@ export function CreatePage() {
             ))}
           </ol>
           <ErrorNotice error={mutation.error} />
+          {profile === 'free_research' && selectedPapers.length > 0 && (
+            <Panel title={`Selected literature context (${selectedPapers.length})`}>
+              <ul>
+                {selectedPapers.map((p) => (
+                  <li key={p.selection_id}>{p.title}</li>
+                ))}
+              </ul>
+              <p>
+                Only these server-verified metadata snapshots will ground ideation. Source findings
+                and novelty are not independently verified.
+              </p>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setSelectedPapers([]);
+                  storeSelectedPapers([]);
+                }}
+              >
+                Remove selected papers
+              </Button>
+            </Panel>
+          )}
           {validation && (
             <div role="alert" className="error-notice">
               {validation}

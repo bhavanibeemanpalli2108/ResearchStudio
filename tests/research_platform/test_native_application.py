@@ -18,7 +18,7 @@ from src.research_platform.config import Settings
 from src.research_platform.database import Database, ModelUsage
 from src.research_platform.dynamic_execution import DynamicExperimentExecutor
 from src.research_platform.experiment_contract import expected_evaluation
-from src.research_platform.literature import LiteratureError
+from src.research_platform.literature import LiteratureClient, LiteratureError
 from src.research_platform.providers import ProviderRouter
 from src.research_platform.services import ResearchServices
 from src.research_platform.worker import Worker
@@ -27,12 +27,12 @@ from test_native_workflow import NativeServices
 
 
 @pytest.mark.parametrize("protocol", ["scheduling_v1", "regression_v1"])
-@pytest.mark.parametrize("boundary", ["offline", "docker"])
+@pytest.mark.parametrize("boundary", ["offline", "selected", "docker"])
 def test_native_application_approvals_docker_metrics_and_report(
     tmp_path, protocol, boundary, monkeypatch
 ):
     executor = DynamicExperimentExecutor(fixture_root=tmp_path / "probe")
-    if boundary == "offline":
+    if boundary != "docker":
         monkeypatch.setattr(
             ResearchServices,
             "dynamic_executor",
@@ -65,9 +65,29 @@ def test_native_application_approvals_docker_metrics_and_report(
                 "question": contract.spec.research_question,
             },
         ).json()
+        selected_ids = []
+        if boundary == "selected":
+            from test_literature import oa, cr
+
+            with httpx.Client(
+                transport=httpx.MockTransport(
+                    lambda req: httpx.Response(
+                        200, json=oa() if req.url.host == "api.openalex.org" else cr()
+                    )
+                )
+            ) as transport:
+                library = LiteratureClient(
+                    settings.artifact_root.parent / "literature-cache", client=transport
+                )
+                selected_ids = [library.discover("Fixture selection")["papers"][0]["selection_id"]]
         response = client.post(
             f"/api/projects/{project['id']}/runs",
-            json={"profile": "free_research", "provider": "groq", "model": "openai/gpt-oss-20b"},
+            json={
+                "profile": "free_research",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selected_paper_ids": selected_ids,
+            },
         )
         assert response.status_code == 201, response.text
         run_id = response.json()["id"]
@@ -92,9 +112,15 @@ def test_native_application_approvals_docker_metrics_and_report(
         assert experiments and all(e["status"] == "completed" for e in experiments)
         assert client.get(f"/api/runs/{run_id}/metrics").json()[0]["metrics"]
         events = client.get(f"/api/runs/{run_id}/events").json()
-        assert any(
-            e["kind"] == "warning" and "without retrieved citations" in e["message"] for e in events
-        )
+        if boundary == "selected":
+            assert run["state"]["literature"][0]["title"] == "A real metadata record"
+            assert run["state"]["literature"][0]["selection"] == "explicit_user_selection"
+            assert any(e["kind"] == "selected_literature" for e in events)
+        else:
+            assert any(
+                e["kind"] == "warning" and "without retrieved citations" in e["message"]
+                for e in events
+            )
         artifacts = client.get(f"/api/runs/{run_id}/artifacts").json()
         manuscript = next(a for a in artifacts if a["name"] == "research_report.md")
         download = client.get(manuscript["download_url"])
@@ -128,6 +154,14 @@ def offline_factory(db, contract, dispatches, stages, values):
                 dispatches.append(row.id)
                 stage = row.stage
                 stages.append(stage)
+                from src.research_platform.database import Run
+
+                selected = session.get(Run, args[2]).config.get("selected_literature")
+                if stage == "ideas" and selected:
+                    prompt = json.loads(request.content)["messages"][-1]["content"]
+                    assert all(
+                        paper["title"] in prompt and paper["id"] in prompt for paper in selected
+                    )
             value = values.get(stage)
             if value is None:
                 value = json.loads(NativeServices().model(stage, "Fixture only"))
