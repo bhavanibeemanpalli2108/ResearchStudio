@@ -43,6 +43,49 @@ def test_missing_credential_does_not_contact_network():
         router.models("gemini")
 
 
+@pytest.mark.parametrize("status", [429, 503, None])
+def test_failed_attempt_diagnostics_survive_a_later_budget_refusal_without_secrets(status):
+    from src.research_platform.ledger import BudgetExceeded
+
+    failures, requests, reservations = [], [], []
+
+    def reserve(*args):
+        if len(reservations) == 2:
+            raise BudgetExceeded("Input reservation limit")
+        reservations.append(args)
+
+    def respond(request):
+        requests.append(request)
+        if status is None:
+            raise httpx.ConnectError("secret-token in private transport detail", request=request)
+        return httpx.Response(status, json={"error": {"message": "secret-token private body"}})
+
+    router = ProviderRouter(
+        client=client(respond),
+        environ={"GEMINI_API_KEY": "secret-token"},
+        on_request=reserve,
+        on_failure=lambda stage, data: failures.append({"stage": stage, **data}),
+        sleep=lambda _: None,
+        jitter=lambda: 0,
+    )
+    with pytest.raises(BudgetExceeded):
+        router._request(
+            "gemini",
+            "POST",
+            "https://example.invalid/private?key=secret-token",
+            request_context=("selected-model", "experiment_spec", "private prompt", 128),
+        )
+    assert len(requests) == len(reservations) == len(failures) == 2
+    assert all(row["status_code"] == status and row["reservation_retained"] for row in failures)
+    assert all(row["stage"] == "experiment_spec" for row in failures)
+    assert (
+        failures[0]["category"]
+        == {429: "rate_limit", 503: "provider_unavailable", None: "transport_error"}[status]
+    )
+    assert "secret-token" not in json.dumps(failures)
+    assert "private" not in json.dumps(failures)
+
+
 @pytest.mark.parametrize("provider", ["gemini", "groq"])
 def test_structured_schema_payload_and_compatibility_retry_are_charged(provider):
     generated, charges = [], []
@@ -162,7 +205,8 @@ def test_groq_json_validation_failure_is_typed_not_schema_compatibility_retry():
         calls.append(payload)
         assert payload["reasoning_effort"] == "low" and payload["include_reasoning"] is False
         assert payload["max_completion_tokens"] == 100 and "max_tokens" not in payload
-        assert "Required JSON schema" in payload["messages"][0]["content"]
+        assert "Required JSON schema" not in payload["messages"][0]["content"]
+        assert payload["response_format"]["type"] == "json_schema"
         return httpx.Response(
             400,
             json={

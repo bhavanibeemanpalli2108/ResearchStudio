@@ -101,11 +101,18 @@ export function FrozenExperimentReview({ run }: { run: Run }) {
         </div>
       </dl>
       <h3>Frozen specification and evaluation</h3>
+      {!!plan.grounding_sha256 && (
+        <p>
+          Literature/hypothesis commitment: <code>{String(plan.grounding_sha256)}</code>. Source
+          identities are checked; the literature rationale remains an AI interpretation.
+        </p>
+      )}
       <CodeBlock
         value={{
           spec: plan.spec,
           evaluation_contract: plan.evaluation_contract,
           evaluation_validation: plan.evaluation_validation,
+          ...(plan.grounding_manifest ? { literature_grounding: plan.grounding_manifest } : {}),
         }}
       />
     </div>

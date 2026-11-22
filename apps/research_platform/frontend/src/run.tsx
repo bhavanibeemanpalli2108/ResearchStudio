@@ -447,6 +447,11 @@ export function RunPage({ section }: { section: string }) {
             )}
             {section === 'ideas' && (
               <IdeasView
+                sources={
+                  Array.isArray(run.config.selected_literature)
+                    ? (run.config.selected_literature as Json[])
+                    : []
+                }
                 ideas={ideas}
                 selected={run.state.selected_idea as Idea | undefined}
                 awaiting={awaiting}
@@ -691,11 +696,13 @@ export function ApprovalModal({
   );
 }
 function IdeasView({
+  sources,
   ideas,
   selected,
   awaiting,
   onReview,
 }: {
+  sources: Json[];
   ideas: Idea[];
   selected?: Idea;
   awaiting: boolean;
@@ -734,6 +741,31 @@ function IdeasView({
               </div>
               <h3>{idea.title}</h3>
               <p>{idea.hypothesis ?? idea.description}</p>
+              {!!idea.citation_ids?.length && (
+                <div>
+                  <small>
+                    AI-generated hypothesis and literature interpretation; findings and novelty
+                    unverified.
+                  </small>
+                  <p>{idea.literature_rationale}</p>
+                  <ul>
+                    {idea.citation_ids.map((id) => {
+                      const paper = sources.find((p) => p.id === id);
+                      return (
+                        <li key={id}>
+                          {paper ? (
+                            <a href={String(paper.url)} target="_blank" rel="noreferrer">
+                              {String(paper.title)} ({id})
+                            </a>
+                          ) : (
+                            id
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
               <div className="idea-scores">
                 {[
                   ['Novelty', idea.novelty_score],
@@ -1304,12 +1336,21 @@ export function PaperView({ run, artifacts }: { run: Run; artifacts: Artifact[] 
 }
 function markdownInline(content: string) {
   return content
-    .split(/(\*\*.*?\*\*|`[^`]+`)/g)
+    .split(/(\*\*.*?\*\*|`[^`]+`|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g)
     .map((part, index) =>
       part.startsWith('**') ? (
         <strong key={index}>{part.slice(2, -2)}</strong>
       ) : part.startsWith('`') ? (
         <code key={index}>{part.slice(1, -1)}</code>
+      ) : /^\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)$/.test(part) ? (
+        <a
+          key={index}
+          href={part.slice(part.indexOf('](') + 2, -1)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {part.slice(1, part.indexOf(']('))}
+        </a>
       ) : (
         part
       ),
@@ -1317,6 +1358,7 @@ function markdownInline(content: string) {
 }
 export function Markdown({ content }: { content: string }) {
   const blocks = content
+    .replace(/(^\|[^\n]*\|)\n(?:[ \t]*\n)+(?=\|)/gm, '$1\n')
     .replace(/([^\n])\n(?=\|[^\n]+\n\|[ \t:|\-]+\|?[ \t]*\n)/g, '$1\n\n')
     .split(/\n\s*\n/);
   return (
@@ -1370,7 +1412,7 @@ export function Markdown({ content }: { content: string }) {
           return (
             <ul key={i}>
               {block.split('\n').map((line, j) => (
-                <li key={j}>{line.replace(/^[-*] /, '')}</li>
+                <li key={j}>{markdownInline(line.replace(/^[-*] /, ''))}</li>
               ))}
             </ul>
           );
@@ -1378,7 +1420,7 @@ export function Markdown({ content }: { content: string }) {
           return (
             <ol key={i}>
               {block.split('\n').map((line, j) => (
-                <li key={j}>{line.replace(/^\d+\. /, '')}</li>
+                <li key={j}>{markdownInline(line.replace(/^\d+\. /, ''))}</li>
               ))}
             </ol>
           );

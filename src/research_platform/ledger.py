@@ -74,6 +74,9 @@ def reserve_model_call(
     stage: str,
     predicted: int,
     maximum: int,
+    keep_input: int = 0,
+    keep_output: int = 0,
+    keep_calls: int = 0,
 ) -> ModelUsage:
     """Caller holds accounting_lock and validates its own lease/grant in this transaction."""
     budgets = run.config["budgets"]
@@ -87,12 +90,20 @@ def reserve_model_call(
     usage = refresh_usage(session, run)
     if daily >= daily_limit:
         raise BudgetExceeded("The configured daily API-call budget is exhausted")
-    if usage["calls"] >= budgets["max_llm_calls"]:
+    if usage["calls"] + 1 + keep_calls > budgets["max_llm_calls"]:
         raise BudgetExceeded("This run's model-call budget is exhausted")
-    if usage["reserved_input_tokens"] + predicted > budgets["max_input_tokens"]:
-        raise BudgetExceeded("This run's input-token reservation budget is exhausted")
-    if usage["reserved_output_tokens"] + maximum > budgets["max_output_tokens"]:
-        raise BudgetExceeded("This run's output-token reservation budget is exhausted")
+    if usage["reserved_input_tokens"] + predicted + keep_input > budgets["max_input_tokens"]:
+        raise BudgetExceeded(
+            f"{stage}: input reservation budget cannot fit estimated request={predicted}, "
+            f"remaining={usage['remaining_input_tokens']}, protected_future={keep_input}. "
+            "Estimates are conservative, not provider usage; no request dispatched."
+        )
+    if usage["reserved_output_tokens"] + maximum + keep_output > budgets["max_output_tokens"]:
+        raise BudgetExceeded(
+            f"{stage}: output reservation budget cannot fit cap={maximum}, "
+            f"remaining={usage['remaining_output_tokens']}, protected_future={keep_output}. "
+            "No request dispatched."
+        )
     if budgets.get("monetary_cap_usd") is not None and provider not in {"mock", "ollama"}:
         raise BudgetExceeded(
             "A monetary cap requires verified pricing; unknown-cost API requests are blocked. Use request/token limits or a local model."

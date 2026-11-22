@@ -17,6 +17,7 @@ from typing import Any, TypeGuard
 from urllib.parse import quote, urlparse
 
 import httpx
+from .prompt_budget import compact_schema
 
 
 class ProviderError(RuntimeError):
@@ -166,6 +167,8 @@ class ProviderRouter:
         client: httpx.Client | None = None,
         environ: Mapping[str, str] | None = None,
         on_request: Callable[[str, str, str, str, int], Any] | None = None,
+        on_failure: Callable[[str, dict[str, Any]], Any] | None = None,
+        on_check: Callable[[str, str, str, str, int], Any] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         jitter: Callable[[], float] = random.random,
         max_attempts: int = 3,
@@ -173,6 +176,8 @@ class ProviderRouter:
         self.environ = environ if environ is not None else os.environ
         self.client = client or httpx.Client(timeout=httpx.Timeout(45, connect=5), trust_env=False)
         self.on_request = on_request
+        self.on_failure = on_failure
+        self.on_check = on_check
         self.sleep, self.jitter = sleep, jitter
         self.max_attempts = max(1, min(max_attempts, 5))
         self._models: dict[str, tuple[float, list[ModelInfo]]] = {}
@@ -303,6 +308,42 @@ class ProviderRouter:
             except (TypeError, ValueError, OverflowError):
                 return 0.0
 
+    def _request_failure(
+        self,
+        provider: str,
+        context: tuple[str, str, str, int] | None,
+        attempt: int,
+        status: int | None,
+        category: str | None = None,
+    ) -> None:
+        # Persist only bounded diagnostic metadata, never provider bodies, URLs,
+        # headers, prompts or exception text that could contain credentials.
+        if context and self.on_failure:
+            self.on_failure(
+                context[1],
+                {
+                    "provider": provider,
+                    "model": context[0],
+                    "attempt": attempt,
+                    "status_code": status,
+                    "category": category
+                    or (
+                        "transport_error"
+                        if status is None
+                        else "rate_limit"
+                        if status == 429
+                        else "provider_unavailable"
+                        if status >= 500
+                        else "model_unavailable"
+                        if status == 404
+                        else "authentication_error"
+                        if status in {401, 403}
+                        else "provider_rejection"
+                    ),
+                    "reservation_retained": True,
+                },
+            )
+
     def _request(
         self,
         provider: str,
@@ -325,7 +366,16 @@ class ProviderRouter:
                 self.on_request(provider, model, stage, prompt, maximum)
             try:
                 response = self.client.request(method, url, **kwargs)
-            except httpx.TransportError:
+            except httpx.TransportError as transport_error:
+                self._request_failure(
+                    provider,
+                    request_context,
+                    attempt + 1,
+                    None,
+                    "timeout"
+                    if isinstance(transport_error, httpx.TimeoutException)
+                    else "transport_error",
+                )
                 error = ProviderUnavailableError(
                     f"{provider} could not be reached.", provider=provider
                 )
@@ -333,6 +383,33 @@ class ProviderRouter:
                     raise error from None
                 self.sleep(min(2**attempt + self.jitter(), 60))
                 continue
+            if response.is_error:
+                failure_details, failure_text = self._error_details(response)
+                category = None
+                if failure_details.get("code") == "json_validate_failed":
+                    category = "malformed_structured_output"
+                elif response.status_code in {400, 422} and (
+                    failure_details.get("code") == "context_length_exceeded"
+                    or any(
+                        word in failure_text
+                        for word in (
+                            "context length",
+                            "context_length",
+                            "context window",
+                            "prompt too long",
+                        )
+                    )
+                ):
+                    category = "context_budget_exceeded"
+                self._request_failure(
+                    provider, request_context, attempt + 1, response.status_code, category
+                )
+                if category == "context_budget_exceeded":
+                    raise ContextBudgetError(
+                        "The provider rejected the model context length; reduce the request before retrying.",
+                        provider=provider,
+                        status_code=response.status_code,
+                    )
             if response.status_code in {401, 403}:
                 raise AuthenticationError(
                     f"{provider} rejected the configured credential.",
@@ -578,15 +655,12 @@ class ProviderRouter:
             )
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}", model):
             raise ModelUnavailableError("Invalid model identifier.", provider=provider)
-        models = self.models(provider)
-        info = next((item for item in models if item.id == model), None)
-        if info is None:
-            raise ModelUnavailableError(
-                "Selected model was not returned by current provider discovery.", provider=provider
-            )
         schema_text = ""
         if json_schema is not None:
+            if not isinstance(json_schema, dict):
+                raise ProviderError("Response schema must be an object.", provider=provider)
             try:
+                json_schema = compact_schema(json_schema)
                 schema_text = json.dumps(
                     json_schema, ensure_ascii=False, separators=(",", ":"), allow_nan=False
                 )
@@ -600,6 +674,14 @@ class ProviderRouter:
                 )
         budget_prompt = prompt + ("\nRequired JSON schema:\n" + schema_text if schema_text else "")
         estimated_input = estimate_tokens(budget_prompt)
+        if self.on_check:
+            self.on_check(provider, model, stage, budget_prompt, max_output_tokens)
+        models = self.models(provider)
+        info = next((item for item in models if item.id == model), None)
+        if info is None:
+            raise ModelUnavailableError(
+                "Selected model was not returned by current provider discovery.", provider=provider
+            )
         if (
             max_output_tokens > info.max_output_tokens
             or estimated_input + max_output_tokens > info.context_tokens
@@ -688,7 +770,7 @@ class ProviderRouter:
                     {"responseMimeType": "application/json", "responseJsonSchema": json_schema}
                 )
             payload = {
-                "contents": [{"role": "user", "parts": [{"text": budget_prompt}]}],
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "generationConfig": generation_config,
             }
             data = self._structured_request(
@@ -736,7 +818,7 @@ class ProviderRouter:
         elif provider == "groq":
             groq_payload: dict[str, Any] = {
                 "model": model,
-                "messages": [{"role": "user", "content": budget_prompt}],
+                "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": max_output_tokens,
                 "temperature": 0.2,
             }
@@ -789,7 +871,7 @@ class ProviderRouter:
                 self._ollama_url() + "/api/chat",
                 json={
                     "model": model,
-                    "messages": [{"role": "user", "content": budget_prompt}],
+                    "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
                     **({"format": json_schema} if json_schema is not None else {}),
                     "options": {

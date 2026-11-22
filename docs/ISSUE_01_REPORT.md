@@ -1,5 +1,10 @@
 # ISSUE-01 — Phase 1 dedicated original-worker infrastructure
 
+Current 2026-11-22 assessment and ordered acceptance plan:
+[Original Sakana next milestone](ORIGINAL_SAKANA_NEXT_MILESTONE.md).
+The dated report below is retained. ISSUE-02 now has a separate offline gateway
+implementation report; neither issue has deployed infrastructure acceptance.
+
 Verified 2026-11-20, Asia/Calcutta. Status: **PARTIALLY RESOLVED**.
 Repository preparation and automated contract verification are complete. No
 compliant guest VM/controller/daemon has been provisioned or accepted. Provisioning

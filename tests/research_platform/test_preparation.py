@@ -292,7 +292,7 @@ def test_schema_is_passed_to_budgeted_model_boundary():
     assess_feasibility({"question": QUESTION}, model)
     _, _, kwargs = model.calls[0]
     assert kwargs["json_schema"]["type"] == "object"
-    assert kwargs["max_output_tokens"] == 1536
+    assert kwargs["max_output_tokens"] == 1024
     assert canonical_hash({"b": 1, "a": 2}) == canonical_hash({"a": 2, "b": 1})
 
 

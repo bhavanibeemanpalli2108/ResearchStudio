@@ -26,6 +26,7 @@ from .experiment_contract import (
     program_artifact,
     validate_prepared_experiment,
 )
+from .prompt_budget import literature_context, idea_context, OUTPUT_LIMITS
 from .providers import StructuredOutputError
 
 T = TypeVar("T", bound=BaseModel)
@@ -120,6 +121,7 @@ def _stage(
         except (ValidationError, ValueError):
             pass
     repairs = max(0, min(int(max_repairs), 2))
+    max_output_tokens = min(max_output_tokens, OUTPUT_LIMITS.get(name, max_output_tokens))
     feedback = ""
     last_error = "Stage output was not validated"
     for attempt in range(repairs + 1):
@@ -270,18 +272,27 @@ def prepare_experiment(
             raise ValueError("research_question must copy the original question byte-for-byte")
         if value.protocol != feasibility.protocol:
             raise ValueError("Protocol must match the validated feasibility assessment")
+        if state.get("config", {}).get("selected_literature") and value.hypothesis != state.get(
+            "selected_idea", {}
+        ).get("hypothesis"):
+            raise ValueError(
+                "hypothesis must copy the selected literature-grounded hypothesis exactly"
+            )
 
     context = {
         "question": question,
-        "selected_idea": state.get("selected_idea", {}),
+        "selected_idea": idea_context(state.get("selected_idea", {})),
         "scope": feasibility.scope_statement,
         "constraints": state.get("constraints", {}),
     }
+    if state.get("config", {}).get("selected_literature"):
+        context["selected_literature"] = literature_context(state, "experiment_spec")
     specification, provenance["experiment_spec"] = _stage(
         "experiment_spec",
         ExperimentSpec,
         "Design the actual selected experiment. Return only an ExperimentSpec JSON using the supplied schema. "
         "Copy research_question EXACTLY, including whitespace and punctuation. Choose frozen synthetic generator parameters, 2-5 distinct seeds and an appropriate metric. "
+        "If a selected hypothesis is supplied, copy it EXACTLY into hypothesis. Keep other text concise. "
         "Test the exact primary comparison requested by that question using ONE reference baseline and ONE candidate. "
         "The selected idea is advisory: preserve the user's requested algorithms, comparator and outcome when translating it into this protocol. "
         "Do not introduce extra comparison arms, orthogonal sensitivity studies or additional factors unless the question explicitly requests them and the selected protocol supports measuring them. "
@@ -420,8 +431,6 @@ def generate_candidate(
             if key not in {"coefficients", "intercept"}
         }
     public = {
-        "research_question": contract.spec.research_question,
-        "hypothesis": contract.spec.hypothesis,
         "spec": public_spec,
         "baseline_source": contract.baseline.source,
         "previous_aggregate_observations": feedback,

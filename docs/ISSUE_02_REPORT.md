@@ -1,5 +1,11 @@
 # ISSUE-02 — Nested model-call budget gateway
 
+Current 2026-11-22 review, remaining lifecycle/free-policy/database-placement gaps
+and ordered deployment/packet acceptance plan:
+[Original Sakana next milestone](ORIGINAL_SAKANA_NEXT_MILESTONE.md).
+The implementation evidence below remains historical; no live Gemini or original
+campaign was authorized by the native release freeze.
+
 Verified: 2026-11-20. Status: **partially resolved**.
 
 Repository implementation and offline validation pass. Requests routed through the

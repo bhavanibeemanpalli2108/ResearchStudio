@@ -96,11 +96,27 @@ def audit(workspace: Path, run_id: str) -> dict[str, Any]:
     result = json.loads(receipt_path.read_text(encoding="utf-8"))
     require(result["configuration"]["spec"] == spec, "Executed design differs from approved spec")
     require(result["spec_hash"] == digest(spec), "Specification hash mismatch")
+    binding = {
+        "prepared_digest": cfg["prepared_digest"],
+        "dataset_sha256": result["dataset_sha256"],
+    }
+    if cfg.get("grounding_manifest"):
+        require(
+            digest(cfg["grounding_manifest"]) == cfg["grounding_sha256"],
+            "Grounding manifest hash mismatch",
+        )
+        require(
+            cfg["grounding_manifest"]["hypothesis"] == spec["hypothesis"],
+            "Grounded hypothesis/spec mismatch",
+        )
+        require(
+            set(cfg["grounding_manifest"]["citation_ids"])
+            <= {p["id"] for p in state["config"]["selected_literature"]},
+            "Grounding cites an unselected source",
+        )
+        binding["grounding_sha256"] = cfg["grounding_sha256"]
     require(
-        cfg["approval_digest"]
-        == digest(
-            {"prepared_digest": cfg["prepared_digest"], "dataset_sha256": result["dataset_sha256"]}
-        ),
+        cfg["approval_digest"] == digest(binding),
         "Final approval binding mismatch",
     )
     require(

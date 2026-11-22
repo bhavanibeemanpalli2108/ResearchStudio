@@ -232,7 +232,7 @@ def test_native_nodes_and_both_approval_gates_survive_checkpoint_reopen(tmp_path
     for stage, prompt, kwargs in service.model_requests:
         if stage in {"planning", "ideas", "selection", "evaluation"}:
             assert kwargs["json_schema"]["type"] == "object"
-            assert kwargs["max_output_tokens"] == 1024
+            assert kwargs["max_output_tokens"] == (512 if stage == "selection" else 1024)
         if stage in {"evaluation", "synthesis"}:
             context = json.loads(prompt.split("\nResearch context:\n", 1)[1])
             assert context["approved_spec"]["seeds"] == [7, 11]
@@ -241,7 +241,7 @@ def test_native_nodes_and_both_approval_gates_survive_checkpoint_reopen(tmp_path
             assert context["execution"]["demo"] is True
             assert context["execution"]["source"] == "synthetic_workflow_fixture"
         if stage == "synthesis":
-            assert kwargs["max_output_tokens"] == 2048
+            assert kwargs["max_output_tokens"] == 1024
             assert "at most 250 words" in prompt
 
 

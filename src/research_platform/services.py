@@ -32,6 +32,8 @@ from .execution import DockerExecutor, ExecutionCancelled
 from .ledger import BudgetExceeded, accounting_lock, reserve_model_call, refresh_usage
 from .ledger import usage_summary as usage_summary
 from .literature import LiteratureClient, LiteratureError
+from .grounding import grounding_manifest, verify_grounding, approval_binding
+from .prompt_budget import future_capacity, OUTPUT_LIMITS, budgeted_prompt
 from .providers import Completion, ProviderError, ProviderRouter, estimate_tokens
 from .scientist_adapter import ScientistAdapter
 from .tracing import redacted_trace
@@ -76,14 +78,24 @@ class ResearchServices:
             ),
         )
         self.router = router or ProviderRouter(
-            on_request=self.reserve_call, sleep=self.provider_wait
+            on_request=self.reserve_call, sleep=self.provider_wait, max_attempts=1
         )
         self.router.on_request = self.reserve_call
+        self.router.on_failure = self.provider_failure
+        self.router.on_check = self.check_request
         self.retrieval = LiteratureClient(settings.artifact_root.parent / "literature-cache")
         self.reservation_ids: list[str] = []
         self.last_request_at = 0.0
         self.active_started = time.monotonic()
         self.verified_models: set[tuple[str, str]] = set()
+
+    def provider_failure(self, stage: str, data: dict[str, Any]) -> None:
+        self.emit(
+            stage,
+            "provider_attempt_failed",
+            "Provider request failed; its budget reservation is retained",
+            data,
+        )
 
     def provider_wait(self, seconds: float) -> None:
         deadline = time.monotonic() + seconds
@@ -192,6 +204,55 @@ class ResearchServices:
                     )
                 )
 
+    def request_headroom(self, stage: str, run: Any) -> tuple[int, int, int]:
+        config = run.config if hasattr(run, "config") else run["config"]
+        return future_capacity(stage) if config.get("profile") == "free_research" else (0, 0, 0)
+
+    def check_request(
+        self, provider: str, model: str, stage: str, prompt: str, maximum: int
+    ) -> None:
+        """Advisory rejection before discovery; atomic reservation rechecks at dispatch."""
+        if self.control() == "cancel":
+            raise ExecutionCancelled("Run cancelled before provider checks")
+        run = self.run_record()
+        usage = run["usage"]
+        budget = run["config"]["budgets"]
+        keep_input, keep_output, keep_calls = self.request_headroom(stage, run)
+        if stage != "provider_preflight" and (provider, model) not in self.verified_models:
+            keep_input += estimate_tokens("Reply with OK.")
+            keep_output += 128
+            keep_calls += 1
+        predicted = estimate_tokens(prompt)
+        if (
+            predicted + keep_input
+            > budget["max_input_tokens"] - usage.get("reserved_input_tokens", 0)
+            or maximum + keep_output
+            > budget["max_output_tokens"] - usage.get("reserved_output_tokens", 0)
+            or 1 + keep_calls > budget["max_llm_calls"] - usage.get("calls", 0)
+        ):
+            data = {
+                "stage": stage,
+                "estimated_input_reservation": predicted,
+                "output_cap": maximum,
+                "remaining_input": budget["max_input_tokens"]
+                - usage.get("reserved_input_tokens", 0),
+                "remaining_output": budget["max_output_tokens"]
+                - usage.get("reserved_output_tokens", 0),
+                "protected_future_input": keep_input,
+                "protected_future_output": keep_output,
+                "estimate_basis": "UTF-8 bytes plus 64; not measured usage",
+                "dispatched": False,
+            }
+            self.emit(
+                stage,
+                "budget_request_rejected",
+                "Next request cannot fit while protecting candidate/report capacity",
+                data,
+            )
+            raise BudgetExceeded(
+                f"{stage}: estimated_input={predicted}, remaining_input={data['remaining_input']}, protected_future_input={keep_input}; output_cap={maximum}, remaining_output={data['remaining_output']}, protected_future_output={keep_output}. No provider request dispatched; reservations unchanged."
+            )
+
     def reserve_call(
         self, provider: str, model: str, stage: str, prompt: str, maximum: int
     ) -> None:
@@ -208,6 +269,7 @@ class ResearchServices:
             run = session.get(Run, self.run_id)
             assert run is not None
             self.assert_lease(session)
+            keep_input, keep_output, keep_calls = self.request_headroom(stage, run)
             row = reserve_model_call(
                 session,
                 run,
@@ -217,8 +279,30 @@ class ResearchServices:
                 stage=stage,
                 predicted=estimate_tokens(prompt),
                 maximum=maximum,
+                keep_input=keep_input,
+                keep_output=keep_output,
+                keep_calls=keep_calls,
             )
             self.reservation_ids.append(row.id)
+            record_event(
+                session,
+                self.run_id,
+                stage,
+                "request_budget",
+                "Conservative request reservation committed before dispatch",
+                {
+                    "provider": provider,
+                    "model": model,
+                    "reservation_id": row.id,
+                    "estimated_input_reservation": row.input_tokens,
+                    "output_cap": maximum,
+                    "remaining_input": run.usage.get("remaining_input_tokens"),
+                    "remaining_output": run.usage.get("remaining_output_tokens"),
+                    "protected_future_input": keep_input,
+                    "protected_future_output": keep_output,
+                    "estimate_basis": "UTF-8 bytes plus 64; not measured usage",
+                },
+            )
         self.last_request_at = time.monotonic()
 
     def finish_call(self, completion: Completion) -> None:
@@ -314,8 +398,19 @@ class ResearchServices:
             .get("stage_models", {})
             .get(stage, {"provider": run["provider"], "model": run["model"]})
         )
-        maximum = min(max_output_tokens, run["config"]["budgets"]["max_output_tokens"])
+        maximum = min(
+            max_output_tokens,
+            run["config"]["budgets"]["max_output_tokens"],
+            OUTPUT_LIMITS.get(stage, max_output_tokens),
+        )
         options: dict[str, Any] = {"json_schema": json_schema} if json_schema else {}
+        self.check_request(
+            selected["provider"],
+            selected["model"],
+            stage,
+            budgeted_prompt(prompt, json_schema),
+            maximum,
+        )
         self.generation_preflight(selected["provider"], selected["model"])
         self.reservation_ids = []
         with self.trace("Model invocation", stage, {**selected, "profile": run["profile"]}):
@@ -406,9 +501,13 @@ class ResearchServices:
         from .preparation import prepare_experiment
         from .experiment_contract import canonical_hash
 
-        context_id = canonical_hash(
-            {k: state.get(k) for k in ("question", "objectives", "constraints", "selected_idea")}
-        )[:16]
+        grounding = grounding_manifest(state)
+        context = {
+            k: state.get(k) for k in ("question", "objectives", "constraints", "selected_idea")
+        }
+        if grounding:
+            context["grounding_sha256"] = canonical_hash(grounding)
+        context_id = canonical_hash(context)[:16]
         previous: dict[str, Any] = {"feasibility": state.get("feasibility")}
         with self.database.sessions() as session:
             components = list(
@@ -448,6 +547,20 @@ class ResearchServices:
             "text/x-python",
             "source",
         )
+        grounding_fields = {}
+        if grounding:
+            grounding_sha256 = canonical_hash(grounding)
+            item_grounding = self.save_artifact(
+                f"grounding-{grounding_sha256}.json",
+                json.dumps(grounding, ensure_ascii=False),
+                "application/json",
+                "literature_grounding",
+            )
+            grounding_fields = {
+                "grounding_manifest": grounding,
+                "grounding_sha256": grounding_sha256,
+                "grounding_artifact_id": item_grounding["id"],
+            }
         return {
             "prepared_artifact_id": item["id"],
             "approval_digest": prepared.approval_digest,
@@ -455,6 +568,7 @@ class ResearchServices:
             "baseline_sha256": prepared.baseline.sha256,
             "evaluation_contract": prepared.evaluation_contract.model_dump(mode="json"),
             "context_id": context_id,
+            **grounding_fields,
         }
 
     def dynamic_executor(self):
@@ -467,7 +581,7 @@ class ResearchServices:
         )
 
     def evaluator_validation(self, state: dict[str, Any]) -> dict[str, Any]:
-        from .experiment_contract import validate_prepared_experiment, canonical_hash
+        from .experiment_contract import validate_prepared_experiment
 
         prepared = validate_prepared_experiment(
             json.loads(self.read_artifact(state["experiment_config"]["prepared_artifact_id"]))
@@ -476,11 +590,9 @@ class ResearchServices:
             self.run_id, prepared, self.settings.artifact_root / self.run_id / "evaluation"
         )
         # Approval binds both the public design and the actual hidden dataset commitment.
-        approval_digest = canonical_hash(
-            {
-                "prepared_digest": prepared.approval_digest,
-                "dataset_sha256": commitment["dataset_sha256"],
-            }
+        verify_grounding(state)
+        approval_digest = approval_binding(
+            prepared.approval_digest, commitment["dataset_sha256"], state["experiment_config"]
         )
         artifact = self.save_artifact(
             f"evaluator-validation-{approval_digest}.json",
@@ -500,6 +612,7 @@ class ResearchServices:
         from .experiment_contract import validate_prepared_experiment
         from .preparation import generate_candidate
 
+        verify_grounding(state)
         plan = state["experiment_config"]
         approved_digest = state.get("approval", {}).get("approval_digest")
         if (
@@ -580,18 +693,18 @@ class ResearchServices:
                 {"profile": run["profile"], "iteration": iteration},
             ):
                 if profile == "free":
-                    from .experiment_contract import validate_prepared_experiment, canonical_hash
+                    from .experiment_contract import validate_prepared_experiment
                     from .execution import CapabilityError
 
                     plan = state["experiment_config"]
                     prepared = validate_prepared_experiment(
                         json.loads(self.read_artifact(plan["prepared_artifact_id"]))
                     )
-                    digest = canonical_hash(
-                        {
-                            "prepared_digest": prepared.approval_digest,
-                            "dataset_sha256": plan["evaluation_validation"]["dataset_sha256"],
-                        }
+                    verify_grounding(state)
+                    digest = approval_binding(
+                        prepared.approval_digest,
+                        plan["evaluation_validation"]["dataset_sha256"],
+                        plan,
                     )
                     if (
                         digest != plan["approval_digest"]
@@ -619,6 +732,17 @@ class ResearchServices:
                         directory,
                         cancel_check=lambda: self.control() == "cancel",
                     )
+            grounding = verify_grounding(state) if profile == "free" else None
+            if grounding:
+                result = {
+                    **result,
+                    "literature_grounding": {
+                        "grounding_sha256": state["experiment_config"]["grounding_sha256"],
+                        "citation_ids": grounding["citation_ids"],
+                        "hypothesis": grounding["hypothesis"],
+                        "idea_id": grounding["idea_id"],
+                    },
+                }
             artifact = self.save_artifact(
                 f"experiment-{experiment_id}.json",
                 json.dumps(result, indent=2),

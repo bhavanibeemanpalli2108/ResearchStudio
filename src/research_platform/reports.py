@@ -127,6 +127,61 @@ def _native_report(state: Mapping[str, Any]) -> str:
         sections.append(
             "**Provenance mismatch:** recorded execution specification differs from the approved specification. Do not accept this report without investigation."
         )
+    grounding = plan.get("grounding_manifest")
+    if grounding:
+        references["grounding_sha256"] = plan.get("grounding_sha256")
+        sections += [
+            "## Research question",
+            str(state.get("question", "")),
+            "## Literature-grounded hypothesis — AI interpretation",
+            str(grounding.get("hypothesis", "")),
+            "Literature rationale (model interpretation, not verified paper findings or novelty): "
+            + str(grounding.get("literature_rationale", "")),
+            "Citation identifiers: " + _json(grounding.get("citation_ids", [])),
+            "## Approved experimental method and comparison",
+            "The bounded synthetic protocol tests this hypothesis only on the approved generated inputs. It does not reproduce a paper's full experimental setting or validate its claims.",
+            "```json\n"
+            + _json(
+                {
+                    "protocol": spec.get("protocol"),
+                    "dataset": spec.get("dataset"),
+                    "seeds": spec.get("seeds"),
+                    "baseline_reference": plan.get("evaluation_contract", {}).get(
+                        "baseline_reference"
+                    ),
+                    "planned_candidate_method_AI_interpretation": state.get(
+                        "selected_idea", {}
+                    ).get("method"),
+                    "actual_baseline_sha256": references["baseline_sha256"],
+                    "actual_candidate_sha256": references["candidate_sha256"],
+                }
+            )
+            + "\n```",
+            "## Selected literature — retrieved metadata and excerpts",
+        ]
+        for paper in grounding.get("sources", []):
+            sections += [
+                f"### {_cell(paper.get('title', 'Untitled'))}",
+                _json(
+                    {
+                        key: paper.get(key)
+                        for key in ("id", "authors", "year", "doi", "retrieved_at", "provenance")
+                    }
+                ),
+                (
+                    "Source-supplied abstract excerpt (not full-text review): "
+                    + str(paper["abstract"])
+                )
+                if paper.get("abstract")
+                else "No abstract was supplied; no paper findings inferred.",
+            ]
+        sections += [
+            "## References",
+            *[
+                f"- [{_cell(p.get('title', 'Untitled'))}]({p.get('url', p.get('id'))}) — {_json(p.get('authors', []))}, {p.get('year', 'year unavailable')}."
+                for p in grounding.get("sources", [])
+            ],
+        ]
     sections += [
         "## Recorded observations",
         f"Execution status: **{result.get('status', 'not executed')}**. Source: `{result.get('source', 'unavailable')}`.",

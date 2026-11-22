@@ -1,8 +1,26 @@
 # Reseon — local native Research Studio v1
 
+Latest verified literature-grounded report:
+http://127.0.0.1:5180/paper/42dd6acadbb54b17870c66ed6737215a.
+See [v1.2.1 live acceptance evidence](RESEON_V1_2_1_LIVE_ACCEPTANCE.md).
+Review/export is read-only and uses no model calls; do not resume completed runs.
+
 Literature discovery: http://127.0.0.1:5180/literature. Search OpenAlex/Crossref,
 select papers and review their attachment to a new native task. Searching does
 not start generation. See [v1.1 instructions and verification](LITERATURE_DISCOVERY_V1_1.md).
+
+V1.2 binds selected sources and the AI hypothesis to the frozen experiment
+approval. Idea cards and reports distinguish retrieved metadata, AI interpretation
+and trusted measurements; report references open real DOI/source links.
+See [grounded workflow validation and limits](LITERATURE_GROUNDED_RESEARCH_V1_2.md).
+No live generation is needed to browse literature or inspect/export completed reports.
+
+V1.2.1 [reliability checks and new-run budget guidance](PROVIDER_RELIABILITY_V1_2_1.md)
+reduce repeated context and retain safe per-attempt/budget diagnostics. A budget
+pause may reflect conservative uncertain reservations even when reported tokens
+are lower. Do not clear those reservations or repeatedly resume the paused live
+run. New live acceptance requires separate authorization; the review instance
+blocks generation. Existing launcher/stop commands and storage paths are unchanged.
 
 Current checkpoint: [v1 verification and release recommendation](RESEARCH_STUDIO_V1.md).
 

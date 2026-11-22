@@ -55,7 +55,9 @@ def test_native_application_approvals_docker_metrics_and_report(
     stages = []
     values = offline_values(contract)
 
-    factory = offline_factory(db, contract, dispatches, stages, values)
+    factory = offline_factory(
+        db, contract, dispatches, stages, values, conservative_usage=boundary == "selected"
+    )
 
     with TestClient(create_app(settings, database=db)) as client:
         project = client.post(
@@ -116,6 +118,17 @@ def test_native_application_approvals_docker_metrics_and_report(
             assert run["state"]["literature"][0]["title"] == "A real metadata record"
             assert run["state"]["literature"][0]["selection"] == "explicit_user_selection"
             assert any(e["kind"] == "selected_literature" for e in events)
+            from src.research_platform.grounding import verify_grounding
+
+            manifest = verify_grounding(run["state"])
+            assert manifest and manifest["citation_ids"] == [run["state"]["literature"][0]["id"]]
+            plan = run["state"]["experiment_config"]
+            assert plan["spec"]["hypothesis"] == manifest["hypothesis"]
+            assert (
+                run["state"]["results"]["literature_grounding"]["grounding_sha256"]
+                == plan["grounding_sha256"]
+            )
+            assert experiments[0]["configuration"]["grounding_sha256"] == plan["grounding_sha256"]
         else:
             assert any(
                 e["kind"] == "warning" and "without retrieved citations" in e["message"]
@@ -129,6 +142,12 @@ def test_native_application_approvals_docker_metrics_and_report(
         )
         assert "AI-generated" in download.text
         assert "test-only" not in download.text
+        if boundary == "selected":
+            assert "Literature-grounded hypothesis" in download.text
+            assert (
+                "## References" in download.text and "https://doi.org/10.1000/abc" in download.text
+            )
+            assert "AI interpretation" in download.text and "not verified" in download.text
         before = run.copy()
         for _ in range(2):
             view = client.get(f"/api/runs/{run_id}/report")
@@ -138,7 +157,9 @@ def test_native_application_approvals_docker_metrics_and_report(
         assert client.get(f"/api/runs/{run_id}").json() == before
 
 
-def offline_factory(db, contract, dispatches, stages, values):
+def offline_factory(
+    db, contract, dispatches, stages, values, *, conservative_usage=False, request_log=None
+):
     def factory(*args):
         def respond(request):
             assert request.url.host == "api.groq.com"
@@ -157,6 +178,16 @@ def offline_factory(db, contract, dispatches, stages, values):
                 from src.research_platform.database import Run
 
                 selected = session.get(Run, args[2]).config.get("selected_literature")
+                charged_input = row.input_tokens if conservative_usage else 80
+                if request_log is not None:
+                    request_log.append(
+                        {
+                            "stage": stage,
+                            "estimated_input": row.input_tokens,
+                            "output_cap": row.reserved_output_tokens,
+                            "payload": json.loads(request.content),
+                        }
+                    )
                 if stage == "ideas" and selected:
                     prompt = json.loads(request.content)["messages"][-1]["content"]
                     assert all(
@@ -165,12 +196,22 @@ def offline_factory(db, contract, dispatches, stages, values):
             value = values.get(stage)
             if value is None:
                 value = json.loads(NativeServices().model(stage, "Fixture only"))
+            if selected and stage == "planning":
+                for hypothesis in value["hypotheses"]:
+                    hypothesis["citation_ids"] = [selected[0]["id"]]
+            if selected and stage == "ideas":
+                for idea in value["ideas"]:
+                    idea.update(
+                        citation_ids=[selected[0]["id"]],
+                        literature_rationale="Fixture AI interpretation of selected source metadata; not verified findings or novelty.",
+                        hypothesis=contract.spec.hypothesis,
+                    )
             text = value if isinstance(value, str) else json.dumps(value)
             return httpx.Response(
                 200,
                 json={
                     "choices": [{"message": {"content": text}, "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 80, "completion_tokens": 120},
+                    "usage": {"prompt_tokens": charged_input, "completion_tokens": 120},
                 },
             )
 

@@ -78,6 +78,23 @@ def test_missing_measurements_or_p_value_cannot_imply_significance():
     assert "statistical significance is not established" in report
 
 
+def test_grounded_report_separates_source_excerpt_interpretation_and_measurement():
+    from test_grounding import grounded_state
+
+    snapshot = state()
+    grounded = grounded_state()
+    snapshot["selected_idea"] = grounded["selected_idea"]
+    snapshot["experiment_config"].update(grounded["experiment_config"])
+    report = render_report(snapshot)
+    assert "Literature-grounded hypothesis" in report
+    assert "not verified paper findings or novelty" in report
+    assert "Genuine provided abstract excerpt." in report
+    assert "No abstract was supplied" in report
+    assert "## References" in report and "https://doi.org/10.1000/source1" in report
+    assert "Baseline minus candidate" in report
+    assert "FABRICATED CLAIM" not in report
+
+
 def test_report_endpoint_preserves_state_budget_and_original_artifact(tmp_path):
     settings = replace(
         Settings(),

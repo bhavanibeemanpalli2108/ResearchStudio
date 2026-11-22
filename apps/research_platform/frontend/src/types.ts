@@ -35,6 +35,8 @@ export interface Usage {
   [key: string]: unknown;
 }
 export interface Idea {
+  citation_ids?: string[];
+  literature_rationale?: string | null;
   id: string;
   title: string;
   hypothesis?: string;

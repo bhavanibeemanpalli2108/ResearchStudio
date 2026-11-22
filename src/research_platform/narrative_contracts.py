@@ -18,6 +18,9 @@ class Hypothesis(ContractModel):
     id: IdeaId
     statement: ShortText
     test: ShortText
+    citation_ids: list[Annotated[str, Field(min_length=1, max_length=600)]] = Field(
+        default_factory=list, max_length=10
+    )
 
 
 class ResearchPlan(ContractModel):
@@ -37,6 +40,10 @@ class ResearchIdea(ContractModel):
     expected_outcome: ShortText
     risks: ShortText | list[ShortText]
     score: float = Field(ge=0, le=10)
+    citation_ids: list[Annotated[str, Field(min_length=1, max_length=600)]] = Field(
+        default_factory=list, max_length=10
+    )
+    literature_rationale: str | None = Field(default=None, min_length=10, max_length=2000)
 
 
 class ResearchIdeas(ContractModel):

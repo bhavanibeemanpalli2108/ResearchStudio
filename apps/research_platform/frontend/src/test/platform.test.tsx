@@ -138,20 +138,24 @@ describe('API failures', () => {
 });
 
 describe('Measured metric shapes', () => {
-  it('renders recorded observations as an accessible table in report previews and print', () => {
-    render(
-      <Markdown
-        content={
-          '**Recorded observations**\n| Recorded metric | Value |\n| --- | --- |\n| baseline | `7292` |\n| candidate | `5180` |'
-        }
-      />,
-    );
-    const table = screen.getByRole('table');
-    expect(table).toHaveTextContent('Recorded metric');
-    expect(screen.getByRole('columnheader', { name: 'Value' })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: '7292' })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: '5180' })).toBeInTheDocument();
-  });
+  it.each([false, true])(
+    'renders recorded observations as an accessible table with spaced rows=%s',
+    (spaced) => {
+      render(
+        <Markdown
+          content={'**Recorded observations**\n| Recorded metric | Value |\n| --- | --- |\n| baseline | `7292` |\n| candidate | `5180` |'.replace(
+            /\n/g,
+            spaced ? '\n\n' : '\n',
+          )}
+        />,
+      );
+      const table = screen.getByRole('table');
+      expect(table).toHaveTextContent('Recorded metric');
+      expect(screen.getByRole('columnheader', { name: 'Value' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: '7292' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: '5180' })).toBeInTheDocument();
+    },
+  );
   it('flattens nested experiment metrics without turning fixture flags into values', () => {
     expect(
       numericMetrics({
@@ -343,6 +347,26 @@ describe('Generation readiness display', () => {
 });
 
 describe('Final report presentation', () => {
+  it('opens real citation links while leaving unsafe schemes and HTML inert', () => {
+    render(
+      <Markdown
+        content={
+          '## References\n\n- [Actual paper](https://doi.org/10.1000/abc)\n- [Unsafe](javascript:alert(1))\n- <script>alert(1)</script>\n\n`[Code](https://example.org)`'
+        }
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Actual paper' })).toHaveAttribute(
+      'href',
+      'https://doi.org/10.1000/abc',
+    );
+    expect(screen.getByRole('link', { name: 'Actual paper' })).toHaveAttribute(
+      'rel',
+      'noopener noreferrer',
+    );
+    expect(screen.queryByRole('link', { name: 'Unsafe' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Code' })).not.toBeInTheDocument();
+    expect(document.querySelector('script')).toBeNull();
+  });
   it('uses the server presentation rather than superseded state for preview and export', async () => {
     const current =
       '# Verified final report\n\nFinal approved experiment contract: 32 jobs.\n\nHistorical proposals are superseded.';

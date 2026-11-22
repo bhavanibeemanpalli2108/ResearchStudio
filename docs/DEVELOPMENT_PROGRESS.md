@@ -1,5 +1,185 @@
 # Development checkpoint
 
+## Native release freeze and original-engine next milestone — 2026-11-22
+
+Local release checkpoint: `reseon-native-v1.2.1`, created only after reviewed Git
+staging, configured-secret/exclusion checks, revalidated native evidence and passing
+Windows/WSL/frontend/browser checks. Existing v1.0/v1.1 tags and scientific evidence
+remain unchanged; no push, provider request, original campaign or privileged host
+change belongs to this release task.
+
+Fresh inspection: 23.43 GiB Windows RAM, approximately 5.85–7.85 GiB free during
+checks, below the reviewed 9-GiB available-RAM target before starting a 6-GiB guest.
+CPU vmx and kvm_intel nested=Y are exposed, but /dev/kvm access fails errno 13
+for the current user. No QEMU/native Ubuntu dockerd found. Docker Desktop is shared
+and noncompliant for the dedicated original-worker contract.
+
+ISSUE-01 and ISSUE-02 remain partially resolved; ISSUE-03 remains blocked/HTTP 409.
+Existing worker/gateway code is not deployed enforcement. Next work is trusted
+run/grant lifecycle and database placement, approved dedicated deployment, actual
+egress/accounting packet tests with mocks, then a separately authorized genuine
+Gemini readiness check. Only after ISSUE-01/02 acceptance should original CLI
+campaign/paper and default-off API/frontend integration proceed.
+Hardware, exact gaps, approval operations, rollback and issue acceptance criteria:
+[ORIGINAL_SAKANA_NEXT_MILESTONE.md](ORIGINAL_SAKANA_NEXT_MILESTONE.md).
+
+## Reseon v1.2.1 — live acceptance passed, 2026-11-22
+
+After explicit authorization of both gates, NEW run
+`42dd6acadbb54b17870c66ed6737215a` completed the exact approved scheduling_v1
+contract with genuine Groq/openai/gpt-oss-20b source and ten successful isolated
+Docker executions (five paired seeds). Actual candidate is stable SPT sorting.
+FIFO mean 2853.8, SPT mean 2095.4, mean improvement 758.4 >0.1; exact two-sided
+sign-flip p=.0625, so no 5% significance claim. One iteration/one experiment only.
+
+Final accounting: 15/20 completed calls, 10,924 reported input/4,576 output tokens,
+no uncertain reservations. Limits unchanged at 40k input/16k output/300 active
+seconds; active use ~26.28 seconds, cost unknown/null. No provider/cleanup/execution
+errors or post-first-gate schema repairs; initial failed-schema responses retained.
+
+Independent read-only audit verifies all five genuine measurement pairs, 26 artifact
+hashes, program/approval/dataset/grounding identities, statistics and ledger totals.
+Docker daemon evidence records ten exit-code-0 containers and cleanup leaves none.
+The cited final report displays in the real frontend and Markdown export matches
+the server byte-for-byte. Full selected source/provenance remains unchanged.
+
+The previous paused run and both historical completed runs remain untouched; no
+budgets reset or reused. Original Sakana launch restrictions remain. Offline tests
+still pass as recorded below; no extra campaign or API request is needed for audit.
+Completed evidence snapshot:
+`bc82e0cd8ad70afc2b26c2f88fb326e0afd5417363d770aec73acd31f1d00f30`.
+Actual results, scope and remaining limits:
+[RESEON_V1_2_1_LIVE_ACCEPTANCE.md](RESEON_V1_2_1_LIVE_ACCEPTANCE.md).
+
+## Reseon v1.2.1 — second gate ready, 2026-11-22
+
+The user approved first-gate preparation for run
+`42dd6acadbb54b17870c66ed6737215a` with explicit mean-improvement/statistical
+corrections. Preparation completed through the existing worker with six additional
+completed calls, 4,562 reported input/1,143 output tokens, zero new provider errors
+or repairs. Total 11/20 calls; 7,916 input/3,410 output charged; 32,084 input/12,590
+output and nine calls remain. All limits and full source provenance are unchanged.
+
+All nine analytical evaluator selfchecks passed, the five seed cases are committed,
+and preparation/spec/baseline/grounding/final digest identities independently verify.
+Final second-gate digest:
+`2b59be4e2cc62f8acb85297bea17e6a39426e0229242fa9631fa8c9a48b16d2d`.
+Strict mean FIFO-minus-SPT >0.1 is separate from the exploratory exact sign-flip
+p-value. An AI idea still mentions median in advisory historical text; the frozen
+evaluator does not compute one and no median result is claimed.
+
+No candidate source, Docker execution, experiment or live research report exists.
+The run is awaiting the separate digest-bound second approval. Historical/paused
+runs remain unchanged. Full contract, all validation cases and per-request
+reservation/usage evidence: [RESEON_V1_2_1_SECOND_GATE.md](RESEON_V1_2_1_SECOND_GATE.md).
+
+## Reseon v1.2.1 provider reliability — 2026-11-22
+
+Offline reliability work complete; live v1.2 acceptance remains incomplete.
+No external API request or research execution was made in this task. Preserved
+the paused 060988269faf4d1dbfde7a362b4718fb run and both completed runs byte-for-byte
+across run/ledger/artifact metadata/experiment/decision/event snapshots.
+
+Native prompts now use bounded unique abstract excerpts for planning/ideation and
+stable references later. Full provenance and approved hypotheses/constraints stay
+intact. Schemas transmit once without annotations; application validators remain
+unchanged. Native HTTP defaults to one uncertain attempt, while existing bounded
+same-model schema compatibility/repair stays accounted. Typed context and timeout
+diagnostics never expose request bodies or credentials. Atomic request-budget
+events retain original estimates after completion; pre-dispatch checks protect
+candidate/evaluation/report capacity and never raise existing limits.
+
+Retained specification estimate projects 10,120 -> 7,530 (-25.6%). A full mocked
+selected-paper flow charged conservative input bytes and completed at 13 calls,
+26,520 estimated input and 11,648 output caps under 20/32k/16k. These are offline
+projections, not live savings or scientific results. The old uncertain HTTP causes
+remain unknowable from retained evidence; 9/20 and 29,923/32k remain unchanged.
+
+Final validation: Windows 241 passed/39 skipped/4 deselected; WSL 280 passed/
+4 deselected; WSL CLI/Inspector 41 passed; React 21 passed; Chromium 6 passed.
+TypeScript/build/Prettier/Ruff and Linux-target mypy (36 sources) pass. Research
+Docker cases excluded; mock transports and process stubs used. No new dependencies,
+providers, infrastructure, protocol, migration or original campaign activation.
+Existing local API/worker/frontend reloaded with generation blocked, not resumed.
+
+Proposed fresh live acceptance: Groq/openai/gpt-oss-20b, one retained paper,
+scheduling_v1, both approvals, NEW 20-call/40k-input/16k-output/one-iteration/
+one-experiment/300-second limits; no change to old budgets. Await explicit
+authorization and current Free-plan confirmation before any real request.
+After separate explicit authorization/confirmation, NEW run
+`42dd6acadbb54b17870c66ed6737215a` reached its first human gate: 5/20 completed
+calls, 3,354 reported input/2,267 output tokens, no uncertain reservations or
+provider failures. Feasibility/planning each used one retained bounded schema
+repair. The live plan cites the actual selected DOI. It remains awaiting first
+approval, with a requested correction separating descriptive positive-seed counts
+from exact sign-flip p-values. No candidate, experiment, final digest or live report
+exists; historical/paused runs are untouched. Live acceptance remains incomplete.
+Exact changes, stage analysis, commands and caveats:
+[PROVIDER_RELIABILITY_V1_2_1.md](PROVIDER_RELIABILITY_V1_2_1.md).
+
+## Reseon v1.2 literature-grounded integration — 2026-11-22
+
+Preserved reviewed v1.1 in commit `fffd4c9` and annotated local tag
+`reseon-native-v1.1.0`; v1.0 tag remains unchanged. No secrets, databases,
+generated evidence or caches were staged; nothing was pushed. V1.2 is uncommitted
+for review. This section records the latest native application status; earlier
+milestones below retain their historical scope.
+
+Selected metadata/excerpts now survive the native prompt compaction path into
+planning, ideation and preparation. Typed hypotheses/ideas must reference actual
+selected IDs; rationale and the experiment hypothesis are linked explicitly.
+A content-hashed source/hypothesis manifest is retained as an artifact and bound
+to the final human approval digest, dataset and prepared design. Candidate work
+and execution reject changed grounding. Unselected/historical approval digests,
+budgets, evaluator restrictions and original campaign HTTP 409 are preserved.
+
+Reports separate retrieved source metadata/excerpts, unverified AI interpretation
+and trusted measurements/statistics. They retain the approved contract and DOI
+references. Citation links open in the frontend and exports match server Markdown;
+measurement-table preview handles blank-separated retained rows. No original
+report or completed scientific evidence was rewritten.
+
+Validation: Windows platform 222 passed/39 skipped/4 deselected; WSL platform
+261 passed/4 deselected; WSL CLI/Inspector 41 passed; frontend 21 passed;
+full Chromium suite 6 passed, plus 1 final grounded-flow browser recheck after the
+table preview correction. TypeScript, production build, formatting, Ruff and
+Linux-target mypy (35 platform/backend sources) pass. Actual Docker-running tests
+were deliberately excluded; scholarly/model/process boundaries in integrations
+are mocked. The existing build chunk/dependency deprecation warnings remain.
+Initial shell initialization/default-platform check failures and their fixes are
+documented rather than concealed.
+
+Live metadata validation: one three-result query, exactly two keyless public GETs,
+OpenAlex 200/Crossref 200; one actual abstract, no fabricated missing abstracts or
+source warnings. The first paper studies quadratic lateness; native total-flow-time
+experiments would be related-method checks, not reproduction of that paper.
+Offline implementation/tests made no Groq/Gemini requests or Docker campaigns.
+After explicit authorization and fresh Free-plan confirmation, NEW live run
+`060988269faf4d1dbfde7a362b4718fb` reached its first gate with real Groq responses
+and the exact selected DOI in its hypothesis. The user approved preparation with
+pairing/statistical clarifications. It then paused safely at `experiment_spec`:
+9/20 calls (seven completed, two uncertain reserved attempts), 9,683 reported input /
+2,664 output tokens; 29,923/32,000 input reservations leave 2,077 capacity. No
+candidate, contract, final digest, experiment or live research report exists; the
+second gate was not reached. Reservations and budgets remain intact. Initial
+HTTP/transport failure statuses were not retained, so no specific quota/API cause
+can be claimed. Added safe per-attempt failure events, validated with three offline
+regressions, without retrying the live run or changing retry/accounting rules.
+The existing Docker Desktop app was started after daemon unavailability; no
+installation, reconfiguration or pull. No historical call budget was consumed.
+
+Historical scheduling audit retains snapshot `f1407818736521ad9fb6140da6edf5b3b56646e86c60e18d916eba9c61a41e77`,
+22 verified artifacts and 13 calls. Older completed run remains at 17 calls with
+its config/state hash unchanged. Existing local launcher starts API, worker and
+Vite; frontend http://127.0.0.1:5180/literature and health
+http://127.0.0.1:8010/api/health returned HTTP 200. The application was restarted
+with generation blocked after the preparation pause. The authorized live run and
+existing unrelated waiting research remain idle. Live end-to-end acceptance is
+partial; deterministic offline complete-workflow acceptance passed.
+
+Exact files, commands, evidence, usage and limitations:
+[LITERATURE_GROUNDED_RESEARCH_V1_2.md](LITERATURE_GROUNDED_RESEARCH_V1_2.md).
+
 ## Current checkpoint — 2026-11-18
 
 The native Mission-1 milestone is validated with two genuine studies. Full original
