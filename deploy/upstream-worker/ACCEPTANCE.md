@@ -15,6 +15,22 @@ isolation, fake a readiness flag or label an unexecuted step passed.
 
 ## 1. Resource and KVM gate — existing WSL, after explicit approval
 
+Phase 2A's 128-MiB paused KVM initialization is now verified; its evidence remains
+in ignored validation storage. It does not establish full-guest capacity or worker
+isolation. Current preparation: [Phase 2B report](../../docs/ORIGINAL_PHASE_2B_READINESS.md).
+Before either disk provisioning or full-guest startup, run the read-only check:
+
+```bash
+python3 deploy/upstream-worker/preflight_vm.py
+```
+
+Exit 0 requires Windows available RAM >=9 GiB, Windows commit headroom >=8 GiB,
+WSL available memory >=8.5 GiB, and both physical Ubuntu-backing volume and Linux
+filesystem free space >=90 GiB. These overlapping memory/disk pools are not added.
+Missing counters/interop/backing metadata fail closed. `start-vm.sh` invokes the
+same gate automatically; passing never substitutes for explicit approval. These
+are startup samples, not a reservation or ongoing memory-pressure guarantee.
+
 The assessment lists the exact QEMU package/group and diskless KVM probe commands.
 Before installing, rerun Windows `Get-Counter` for Available Bytes, Committed Bytes
 and Commit Limit, `Get-PSDrive C,D`, `wsl --list --verbose`, then native Linux `id`,
@@ -65,8 +81,12 @@ Do not install/reconfigure Docker in normal WSL or Windows.
 Use the README's exact account/directory/install commands for agsci-worker and
 the three supplied service/slice files. Keep campaigns=0, agent.env empty and
 credentials fake. Stage only a reviewed source archive and pinned agent image.
-Phase 1 commit is e8b9e27531fa4f15ee6f07fa1585dfeac0861742; review/commit the small
-Phase 2 TLS correction before packaging a TLS-enabled deployment. `git archive`
+The earlier published checkpoint 4672bf10ed7d994aedbd87412f22588cb764fce2
+includes TLS launcher support but predates the resource preflight. Use the reviewed
+Phase 2B follow-up checkpoint containing `preflight_vm.py` and the gated launcher,
+not that older archive. Historical hash mappings are in
+`docs/GH013_HISTORY_REPAIR.md`. Pin and record the full accepted source archive
+before deployment. `git archive`
 from the accepted commit avoids `.env`, databases, caches and untracked evidence;
 review its listing and SHA-256. Do not claim an older archive includes TLS flags.
 
@@ -257,6 +277,7 @@ An approved bounded alternative launch, only after a provisioned private disk an
 mock gateway exist, is:
 
 ```bash
+python3 deploy/upstream-worker/preflight_vm.py &&
 sudo systemd-run --unit=reseon-worker-vm --collect \
   -p User=sonusunny -p Group=sonusunny -p SupplementaryGroups=kvm \
   -p CPUQuota=400% -p MemoryMax=8G -p MemorySwapMax=0 -p TasksMax=128 \

@@ -6,6 +6,10 @@ if [[ $# != 2 || "$1" != "--start-approved-vm" ]]; then
   exit 2
 fi
 disk="$2"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# Always measure Windows physical/commit headroom, not the overlapping WSL pool.
+# A missing/failed measurement refuses startup. This gate never provisions a disk.
+python3 "$script_dir/preflight_vm.py"
 [[ "$disk" =~ ^/[A-Za-z0-9_./-]+\.qcow2$ && -f "$disk" && ! -L "$disk" ]] || { echo 'Provide an existing private qcow2 guest disk' >&2; exit 2; }
 [[ -r /dev/kvm && -w /dev/kvm ]] || { echo 'KVM is unavailable to this user; no software-emulation fallback' >&2; exit 1; }
 command -v qemu-system-x86_64 >/dev/null

@@ -1,5 +1,18 @@
 # Dedicated original worker: Phase 1 deployment
 
+Phase 2B preparation (no provisioning): [current report](../../docs/ORIGINAL_PHASE_2B_READINESS.md).
+The WSL laptop launcher now runs the read-only `preflight_vm.py` before any QEMU
+startup. Windows RAM/commit, WSL memory and physical backing-space floors must
+pass; unavailable measurements refuse startup. Check without starting anything:
+
+```bash
+python3 deploy/upstream-worker/preflight_vm.py
+```
+
+This measures resources only and grants no permission to provision/start a guest.
+It is specific to the inspected Ubuntu-on-Windows laptop; a different trusted
+Linux host needs a reviewed host-specific check, not a bypass flag.
+
 Current 2026-11-23 resource gates, separate approvals and ordered packet/TLS/
 accounting/cleanup procedures: [Phase 2 acceptance](ACCEPTANCE.md) and
 [readiness assessment](../../docs/ORIGINAL_PHASE_2_READINESS.md). They supersede

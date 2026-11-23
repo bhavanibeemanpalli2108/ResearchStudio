@@ -1,5 +1,15 @@
 # Original engine Phase 2 — deployment readiness
 
+**Phase 2A update, 2026-11-23:** the owner completed the authorized QEMU installation
+and kvm-group configuration. Native binaries and actual read/write device access
+are independently verified. The separately authorized 128-MiB diskless KVM probe
+succeeded once at 11:55:52 local time: QMP commands passed, exit 0 in 0.113 seconds,
+no stderr or remaining probe process. Full-guest memory headroom currently fails
+the earlier floors; Phase 2B remains unapproved. See the current
+[Phase 2A readiness report](ORIGINAL_PHASE_2A_READINESS.md). The installation-absent
+and commands-not-executed statements below are retained as the earlier dated
+assessment, not the current installation status.
+
 Assessment: **2026-11-23, Asia/Calcutta**. This is preparation, not deployment
 acceptance. No package, group, VM, genuine credential, firewall, system service or
 virtualization setting was installed/changed. Docker Desktop was not started.
