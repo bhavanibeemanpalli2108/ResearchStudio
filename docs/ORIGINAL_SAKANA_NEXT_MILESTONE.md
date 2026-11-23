@@ -1,5 +1,12 @@
 # Original Sakana integration after Reseon native v1.2.1
 
+Phase 1 follow-up: [offline controller lifecycle](ORIGINAL_CONTROLLER_PHASE_1.md)
+now implements the run/grant/worker coordination and selects trusted same-host
+Linux/local SQLite persistence. The release assessment below is retained as
+historical; its absent-controller/operator_managed-only descriptions are
+superseded by that follow-up. Long-window renewal, Gemini free-policy and actual
+deployment/egress acceptance remain open. No original launch is enabled.
+
 Assessment: 2026-11-22. Scope: release verification and a plan only. No QEMU,
 guest, privileged configuration, real Gemini request or original campaign was
 started. Original web launch remains HTTP 409. Existing native services, evidence,

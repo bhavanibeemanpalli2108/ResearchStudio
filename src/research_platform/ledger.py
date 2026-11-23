@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy import func, select, text
-from .database import ModelUsage, Run
+from .database import ModelUsage, Run, new_id
 
 
 class BudgetExceeded(RuntimeError):
@@ -77,6 +77,7 @@ def reserve_model_call(
     keep_input: int = 0,
     keep_output: int = 0,
     keep_calls: int = 0,
+    reservation_id: str | None = None,
 ) -> ModelUsage:
     """Caller holds accounting_lock and validates its own lease/grant in this transaction."""
     budgets = run.config["budgets"]
@@ -109,6 +110,7 @@ def reserve_model_call(
             "A monetary cap requires verified pricing; unknown-cost API requests are blocked. Use request/token limits or a local model."
         )
     row = ModelUsage(
+        id=reservation_id or new_id(),
         run_id=run.id,
         provider=provider,
         model=model,

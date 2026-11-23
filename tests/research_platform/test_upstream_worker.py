@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
@@ -429,3 +430,80 @@ def test_gateway_mode_refuses_unmarked_existing_auth_home(configured):
     )
     with pytest.raises(FileNotFoundError):
         worker._prepare_gateway_cli(request().model_copy(update={"run_id": identifier}), job)
+
+
+def test_authenticated_scoped_delivery_binding_rotation_and_private_storage(configured):
+    settings, worker, _ = configured
+    worker.settings = replace(settings, gateway_origin="https://10.0.2.100:8843", env_file=None)
+    identifier = str(uuid4())
+    token = "gw_" + "a" * 43
+    app = module.create_app(worker.settings, worker=worker)
+    path = f"/v1/runs/{identifier}/gateway-credential"
+    headers = {"Authorization": "Bearer " + settings.token}
+    with TestClient(app) as client:
+        assert client.post(path, json={"scoped_token": token}).status_code == 401
+        for body in (
+            {"scoped_token": "not-scoped"},
+            {"scoped_token": token, "url": "https://evil.invalid"},
+            {"scoped_token": [token]},
+        ):
+            response = client.post(path, headers=headers, json=body)
+            assert response.status_code == 400 and token not in response.text
+        response = client.post(path, headers=headers, json={"scoped_token": token})
+        assert response.json() == {"run_id": identifier, "credential_ready": True}
+        assert token not in response.text
+        credential = worker._gateway_file(identifier)
+        assert credential.stat().st_mode & 0o077 == 0
+        assert "/runs/" + identifier.replace("-", "") in credential.read_text()
+        worker.active = identifier
+        assert client.post(path, headers=headers, json={"scoped_token": token}).status_code == 200
+        assert (
+            client.post(path, headers=headers, json={"scoped_token": "gw_" + "b" * 43}).status_code
+            == 409
+        )
+        assert (
+            client.get(
+                f"/v1/runs/{identifier}/artifacts/{credential.name}", headers=headers
+            ).status_code
+            == 404
+        )
+        worker.active = None
+        assert (
+            client.post(path, headers=headers, json={"scoped_token": "gw_" + "b" * 43}).status_code
+            == 200
+        )
+    assert worker.capabilities()["nested_call_budget_enforced"] is False
+    assert not worker.settings.campaigns_enabled
+
+
+def test_scoped_credential_symlink_and_expired_worker_resume_rejected(configured, monkeypatch):
+    settings, worker, _ = configured
+    worker.settings = replace(
+        settings, gateway_origin="https://10.0.2.100:8843", campaigns_enabled=True
+    )
+    payload = request().model_copy(update={"nested_budget_policy": "gateway_scoped"})
+    identifier = payload.run_id
+    credential = worker._gateway_file(identifier)
+    credential.symlink_to(settings.env_file)
+    with pytest.raises(HTTPException):
+        worker.deliver_grant(identifier, "gw_" + "a" * 43)
+    credential.unlink()
+    worker.deliver_grant(identifier, "gw_" + "a" * 43)
+    job = worker._job(identifier)
+    job.mkdir(mode=0o700)
+    import hashlib
+
+    module._write_json(
+        job / "job.json",
+        {
+            "run_id": identifier,
+            "status": "interrupted",
+            "cleanup_verified": True,
+            "attempts": 1,
+            "campaign_deadline": time.time() - 1,
+            "request_digest": hashlib.sha256(payload.model_dump_json().encode()).hexdigest(),
+        },
+    )
+    monkeypatch.setattr(worker, "capabilities", lambda: {"ready": True})
+    with pytest.raises(HTTPException, match="Scoped execution window expired"):
+        worker.submit(payload, resume=True)

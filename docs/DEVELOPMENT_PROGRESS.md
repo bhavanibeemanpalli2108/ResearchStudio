@@ -1,5 +1,32 @@
 # Development checkpoint
 
+## Original engine offline controller lifecycle — 2026-11-22
+
+Added the default-off original controller using existing Run/Job/GatewayGrant/
+ModelUsage/event/artifact persistence: UUID/request identity, dedicated queue
+fencing, authenticated worker readiness/submission and per-run credential
+delivery, bounded grants/deadlines, cancellation, interruption/restart recovery,
+duplicate dispatch/reservation protection and safe artifact import. Native web
+controls now explicitly reject original runs. Original creation remains HTTP 409.
+No new database/schema/framework or native research dispatcher was introduced.
+
+The trusted production boundary is one Linux host/local POSIX SQLite for backend,
+controller and gateway; the disposable worker gets HTTP only and no ledger/key
+access. No Windows/WSL cross-filesystem production sharing is accepted. Deployment,
+Gemini free-policy/credential readiness and host-controlled egress acceptance are
+still required. ISSUE-01/02 remain partial and ISSUE-03 disabled. No provider call,
+original campaign, infrastructure change or release tag modification occurred.
+
+Implementation, recovery behavior, test commands/results, limitations and approval
+requirements: [Phase 1 report](ORIGINAL_CONTROLLER_PHASE_1.md).
+Final checks: Windows platform 262 passed/41 skipped/4 deselected; WSL combined
+platform and CLI/Inspector 344 passed/4 deselected; React 21 and Chromium offline
+journeys 6 passed. Ruff, formatting, mypy (37 sources), TypeScript/build/Prettier
+pass. Windows original CLI collection remains unavailable due to its existing
+POSIX `fcntl` dependency; its 41 tests pass in WSL. No portability shim was added.
+Both retained DB snapshots and 121 artifact files match the release baseline;
+native acceptance remains at 15 calls. Release tag/commit is unchanged.
+
 ## Native release freeze and original-engine next milestone — 2026-11-22
 
 Local release checkpoint: `reseon-native-v1.2.1`, created only after reviewed Git

@@ -1,5 +1,9 @@
 # ISSUE-01 — Phase 1 dedicated original-worker infrastructure
 
+2026-11-22 follow-up: [offline controller integration](ORIGINAL_CONTROLLER_PHASE_1.md)
+adds persistent run/grant coordination and scoped credential delivery. This does
+not provision or accept a dedicated worker. Status remains **partially resolved**.
+
 Current 2026-11-22 assessment and ordered acceptance plan:
 [Original Sakana next milestone](ORIGINAL_SAKANA_NEXT_MILESTONE.md).
 The dated report below is retained. ISSUE-02 now has a separate offline gateway

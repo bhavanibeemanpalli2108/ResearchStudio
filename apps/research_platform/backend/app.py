@@ -429,6 +429,11 @@ def create_app(settings: Settings | None = None, *, database: Database | None = 
                 raise HTTPException(404, "Research run not found")
             job = session.scalar(select(Job).where(Job.run_id == run_id).with_for_update())
             assert job is not None
+            if run.config.get("engine") == "original":
+                raise HTTPException(
+                    409,
+                    "Original runs require the trusted controller; web controls remain disabled",
+                )
             if run.profile != "demo" and run.config.get("execution_protocol") != 2:
                 raise HTTPException(
                     409,

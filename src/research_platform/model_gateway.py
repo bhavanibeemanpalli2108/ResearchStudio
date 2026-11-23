@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from .database import Database, GatewayGrant, ModelUsage, Run, WorkflowEvent, new_id
+from .database import Database, GatewayGrant, Job, ModelUsage, Run, WorkflowEvent, new_id
 from .ledger import BudgetExceeded, accounting_lock, refresh_usage, reserve_model_call
 from .providers import estimate_tokens
 
@@ -69,7 +69,16 @@ def _audit(session: Any, run_id: str, decision: str, request_id: str, **data: An
         )
         or 0
     )
-    if count >= 1000:
+    # Optional denial/metadata logging is capped. Ledger/grant linkage must
+    # survive a flood of denied requests; admitted calls are budget-bounded.
+    if count >= 1000 and decision not in {
+        "reserved",
+        "grant_issued",
+        "grant_revoked",
+        "completed",
+        "failed",
+        "uncertain",
+    }:
         return
     session.add(
         WorkflowEvent(
@@ -91,6 +100,7 @@ def _active_run(run: Run | None) -> Run:
         or run.provider != "gemini"
         or run.status != "running"
         or run.control in {"cancel", "pause"}
+        or (run.state.get("original") and run.state["original"].get("deadline", 0) <= time.time())
     ):
         raise GatewayDenied("run_not_authorized")
     return run
@@ -118,30 +128,56 @@ def issue_grant(
         or any(not MODEL.fullmatch(m) for m in allowed_models)
     ):
         raise ValueError("Invalid bounded gateway grant policy")
-    token = "gw_" + secrets.token_urlsafe(32)
     with database.sessions.begin() as session:
         accounting_lock(session)
-        run = _active_run(session.get(Run, run_id))
-        grant = GatewayGrant(
-            run_id=run.id,
-            token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            allowed_models=list(dict.fromkeys(allowed_models)),
-            max_output_tokens=max_output_tokens,
-            expires_at=time.time() + ttl_seconds,
-        )
-        session.add(grant)
-        session.flush()
-        _audit(
+        return issue_grant_locked(
             session,
-            run.id,
-            "grant_issued",
-            new_id(),
-            grant_id=grant.id,
-            models=grant.allowed_models,
-            expires_at=grant.expires_at,
+            run_id,
+            allowed_models=allowed_models,
+            ttl_seconds=ttl_seconds,
+            max_output_tokens=max_output_tokens,
         )
-        identifier = grant.id
-    return identifier, token
+
+
+def issue_grant_locked(
+    session: Any,
+    run_id: str,
+    *,
+    allowed_models: list[str],
+    ttl_seconds: int,
+    max_output_tokens: int,
+) -> tuple[str, str]:
+    """Caller holds accounting_lock; grant and controller state commit atomically."""
+    if (
+        type(ttl_seconds) is not int
+        or not 1 <= ttl_seconds <= 900
+        or type(max_output_tokens) is not int
+        or not 1 <= max_output_tokens <= 4096
+        or not 1 <= len(allowed_models) <= 8
+        or any(not MODEL.fullmatch(m) for m in allowed_models)
+    ):
+        raise ValueError("Invalid bounded gateway grant policy")
+    run = _active_run(session.get(Run, run_id))
+    token = "gw_" + secrets.token_urlsafe(32)
+    grant = GatewayGrant(
+        run_id=run.id,
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        allowed_models=list(dict.fromkeys(allowed_models)),
+        max_output_tokens=max_output_tokens,
+        expires_at=time.time() + ttl_seconds,
+    )
+    session.add(grant)
+    session.flush()
+    _audit(
+        session,
+        run.id,
+        "grant_issued",
+        new_id(),
+        grant_id=grant.id,
+        models=grant.allowed_models,
+        expires_at=grant.expires_at,
+    )
+    return grant.id, token
 
 
 def revoke_grant(database: Database, grant_id: str) -> None:
@@ -176,6 +212,16 @@ class GeminiGateway:
         ):
             raise GatewayDenied("invalid_credential", 401)
         run = _active_run(session.get(Run, run_id))
+        if run.state.get("original"):
+            job = session.scalar(select(Job).where(Job.run_id == run.id))
+            if (
+                job is None
+                or not job.owner
+                or not job.owner.startswith("original:")
+                or job.lease_until <= time.time()
+                or run.state["original"].get("operation") not in {"submitting", "running"}
+            ):
+                raise GatewayDenied("controller_not_authorized")
         if model is not None and (not MODEL.fullmatch(model) or model not in grant.allowed_models):
             raise GatewayDenied("model_not_authorized")
         return grant, run
@@ -196,6 +242,11 @@ class GeminiGateway:
         with self.database.sessions.begin() as session:
             accounting_lock(session)
             grant, run = self.authorize(session, token, run_id, model)
+            # A supplied request identity is never replayed or refunded. Identical
+            # prompts with different identities remain separate, charged attempts.
+            reservation_id = hashlib.sha256((run_id + ":" + request_id).encode()).hexdigest()[:32]
+            if session.get(ModelUsage, reservation_id) is not None:
+                raise GatewayDenied("duplicate_request", 409)
             config = dict(payload.get("generationConfig") or {})
             wanted = config.get("maxOutputTokens", grant.max_output_tokens)
             if (
@@ -222,6 +273,7 @@ class GeminiGateway:
                 stage="upstream_gateway",
                 predicted=estimate_tokens(serialized),
                 maximum=maximum,
+                reservation_id=reservation_id,
             )
             _audit(
                 session,
@@ -408,7 +460,9 @@ def create_gateway_app(
 
     @app.middleware("http")
     async def authenticate(request: Request, call_next: Any) -> Any:
-        request_id = new_id()
+        request_id = request.headers.get("x-reseon-request-id") or new_id()
+        if not re.fullmatch(r"[a-f0-9]{32}", request_id):
+            return _error("invalid_request_id", 400, new_id())
         request.state.request_id = request_id
         match = PATH.fullmatch(request.url.path)
         token = request.headers.get("x-goog-api-key", "")

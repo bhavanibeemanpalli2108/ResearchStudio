@@ -38,7 +38,7 @@ class UpstreamRunRequest(BaseModel):
     generate_paper: bool = True
     # Original coding agents make nested model calls outside the platform router.
     # This acknowledgment must come from the operator's separately approved policy.
-    nested_budget_policy: Literal["operator_managed"]
+    nested_budget_policy: Literal["operator_managed", "gateway_scoped"]
     nested_budget_approved: Literal[True]
 
     @field_validator("run_id")
@@ -182,6 +182,14 @@ class UpstreamWorkerClient:
     def submit(self, request: UpstreamRunRequest) -> dict[str, Any]:
         request.checked_id()
         return self._request("POST", "/v1/runs", payload=request.model_dump())
+
+    def deliver_grant(self, job_id: str, token: str) -> dict[str, Any]:
+        """Authenticated management path; scoped token only, never a real key."""
+        return self._request(
+            "POST",
+            f"/v1/runs/{self._job_id(job_id)}/gateway-credential",
+            payload={"scoped_token": token},
+        )
 
     def dry_run(self, request: UpstreamRunRequest) -> dict[str, Any]:
         request.checked_id()

@@ -1,5 +1,11 @@
 # ISSUE-02 — Nested model-call budget gateway
 
+2026-11-22 follow-up: [offline controller integration](ORIGINAL_CONTROLLER_PHASE_1.md)
+implements scoped lifecycle, deadline/lease fencing and persistent request-ID
+deduplication using the existing ledger. Same-host trusted Linux/local SQLite
+placement is selected; deployment and genuine Gemini/free-policy/egress proof
+remain pending. Status remains **partially resolved**, not deployed enforcement.
+
 Current 2026-11-22 review, remaining lifecycle/free-policy/database-placement gaps
 and ordered deployment/packet acceptance plan:
 [Original Sakana next milestone](ORIGINAL_SAKANA_NEXT_MILESTONE.md).

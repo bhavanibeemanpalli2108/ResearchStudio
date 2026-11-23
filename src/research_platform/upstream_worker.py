@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from .upstream_execution import UpstreamRunRequest, upstream_command
@@ -55,6 +55,7 @@ TERMINAL = {
 class WorkerSettings:
     enabled: bool = False
     campaigns_enabled: bool = False
+    gateway_origin: str = ""
     root: Path | None = None
     token: str = ""
     isolation_ack: str = ""
@@ -73,6 +74,7 @@ class WorkerSettings:
         return cls(
             enabled=env.get("RESEARCH_UPSTREAM_WORKER_ENABLED") == "1",
             campaigns_enabled=env.get("RESEARCH_UPSTREAM_CAMPAIGNS_ENABLED") == "1",
+            gateway_origin=env.get("RESEARCH_UPSTREAM_GATEWAY_ORIGIN", ""),
             root=Path(env["RESEARCH_UPSTREAM_WORKER_ROOT"])
             if env.get("RESEARCH_UPSTREAM_WORKER_ROOT")
             else None,
@@ -471,6 +473,16 @@ class UpstreamWorker:
                         )
             except (OSError, ValueError, subprocess.SubprocessError):
                 pass
+        if settings.gateway_origin:
+            from .gateway_client import validate_gateway_client
+
+            try:
+                validate_gateway_client(
+                    settings.gateway_origin + "/runs/" + "0" * 32, "gw_" + "a" * 43
+                )
+                checks["gemini_credentials_configured"] = True
+            except ValueError:
+                checks["gemini_credentials_configured"] = False
         infrastructure = all(
             value for key, value in checks.items() if key != "gemini_credentials_configured"
         )
@@ -492,6 +504,8 @@ class UpstreamWorker:
                 "paper",
             ],
             "nested_call_budget_enforced": False,
+            "gateway_protocol": "run-scoped-v1",
+            "gateway_credentials": bool(settings.gateway_origin),
             "budget_policy": "Original coding agents make nested calls. Operator-managed provider quotas and explicit approval are required; platform request caps do not apply.",
             "isolation": "Dedicated VM and daemon are operator attested; finite cgroup configuration and Docker prerequisites are checked. This does not certify a production security boundary.",
             "reason": None
@@ -611,7 +625,11 @@ class UpstreamWorker:
             task_dir=str(job / "brief"),
             run_dir=str(job / "run"),
             auth_root=str(job / "auth"),
-            env_file=str(self.settings.env_file),
+            env_file=str(
+                self._gateway_file(request.run_id)
+                if request.nested_budget_policy == "gateway_scoped"
+                else self.settings.env_file
+            ),
             image=image,
             resume=resume,
             dry_run=dry_run,
@@ -641,6 +659,10 @@ class UpstreamWorker:
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         with self.lock:
+            if request.nested_budget_policy == "gateway_scoped" and not _private_owned(
+                self._gateway_file(request.run_id)
+            ):
+                raise HTTPException(409, "Run-scoped gateway credential is required")
             job = self._job(request.run_id)
             digest = hashlib.sha256(request.model_dump_json().encode()).hexdigest()
             if job.exists() and not resume:
@@ -671,6 +693,11 @@ class UpstreamWorker:
                     )
                 if record["attempts"] >= 3:
                     raise HTTPException(409, "Worker resume attempt limit exhausted")
+                if (
+                    request.nested_budget_policy == "gateway_scoped"
+                    and record.get("campaign_deadline", 0) <= time.time()
+                ):
+                    raise HTTPException(409, "Scoped execution window expired")
                 self._resume_phases(request, job)
             else:
                 if resume:
@@ -708,6 +735,8 @@ class UpstreamWorker:
                     "nested_call_budget_enforced": False,
                     "artifacts": [],
                 }
+                if request.nested_budget_policy == "gateway_scoped":
+                    record["campaign_deadline"] = time.time() + request.runtime_seconds
             if self.active is not None:
                 # No queue is silently created: a busy worker is a retryable
                 # external dependency and original request id stays idempotent.
@@ -801,7 +830,12 @@ class UpstreamWorker:
                 )
                 with self.lock:
                     self.processes[request.run_id] = process
-                deadline = time.monotonic() + request.runtime_seconds
+                remaining_seconds = request.runtime_seconds
+                if request.nested_budget_policy == "gateway_scoped":
+                    remaining_seconds = min(
+                        remaining_seconds, record.get("campaign_deadline", 0) - time.time()
+                    )
+                deadline = time.monotonic() + remaining_seconds
                 while process.poll() is None:
                     if (
                         cancelled.wait(0.25)
@@ -871,6 +905,45 @@ class UpstreamWorker:
                     # Failed cleanup keeps the worker fenced against further jobs.
                     self.active = None if cleanup else request.run_id
 
+    def _gateway_file(self, identifier: str) -> Path:
+        self._job(identifier)  # canonical UUID and private-root checks
+        return self._root() / (".gateway-" + identifier + ".env")
+
+    def deliver_grant(self, identifier: str, token: str) -> dict[str, Any]:
+        from .gateway_client import validate_gateway_client
+
+        origin = self.settings.gateway_origin
+        base = origin + "/runs/" + UUID(identifier).hex
+        try:
+            validate_gateway_client(base, token)
+            from urllib.parse import urlparse
+
+            parsed = urlparse(origin)
+            if parsed.scheme != "https" or parsed.path or parsed.query or parsed.fragment:
+                raise ValueError
+        except (ValueError, TypeError):
+            raise HTTPException(400, "Invalid scoped gateway configuration") from None
+        content = f"GEMINI_API_KEY={token}\nGOOGLE_GEMINI_BASE_URL={base}\n".encode()
+        with self.lock:
+            path = self._gateway_file(identifier)
+            if path.exists():
+                if not _private_owned(path):
+                    raise HTTPException(409, "Unsafe gateway credential file")
+                if _read_bounded(path, path.parent, 8192) == content:
+                    return {"run_id": identifier, "credential_ready": True}
+            if self.active is not None:
+                raise HTTPException(409, "Cannot rotate credentials while worker is active")
+            fd, temporary = tempfile.mkstemp(prefix=".credential-", dir=path.parent)
+            try:
+                with os.fdopen(fd, "wb") as output:
+                    output.write(content)
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.replace(temporary, path)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
+        return {"run_id": identifier, "credential_ready": True}
+
     def _prepare_gateway_cli(self, request: UpstreamRunRequest, job: Path) -> None:
         """Operator-owned gateway configuration only; never inferred from research input."""
         import io
@@ -878,7 +951,11 @@ class UpstreamWorker:
         from dotenv import dotenv_values
         from .gateway_client import prepare_cli_environment, validate_gateway_client
 
-        path = self.settings.env_file
+        path = (
+            self._gateway_file(request.run_id)
+            if request.nested_budget_policy == "gateway_scoped"
+            else self.settings.env_file
+        )
         if path is None or not _private_owned(path):
             raise ValueError("Private agent configuration unavailable")
         values = dotenv_values(
@@ -1126,6 +1203,20 @@ def create_app(
     @app.post("/v1/runs")
     def submit(request: UpstreamRunRequest) -> dict[str, Any]:
         return worker.submit(request)
+
+    @app.post("/v1/runs/{identifier}/gateway-credential")
+    async def credential(identifier: str, request: Request) -> dict[str, Any]:
+        try:
+            body = await request.json()
+            if (
+                not isinstance(body, dict)
+                or set(body) != {"scoped_token"}
+                or not isinstance(body["scoped_token"], str)
+            ):
+                raise ValueError
+            return worker.deliver_grant(identifier, body["scoped_token"])
+        except (ValueError, TypeError):
+            raise HTTPException(400, "Invalid scoped credential request") from None
 
     @app.get("/v1/runs/{identifier}")
     def status(identifier: str) -> dict[str, Any]:
