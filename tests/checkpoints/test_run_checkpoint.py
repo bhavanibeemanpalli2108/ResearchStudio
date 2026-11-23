@@ -785,7 +785,9 @@ def test_secret_bearing_content_is_excluded(tmp_path: Path, relative: str, conte
     ("relative", "content"),
     [
         pytest.param("template.env.example", "OPENAI_API_KEY=${OPENAI_API_KEY}\n", id="expansion"),
-        pytest.param("template.env.example", "OPENAI_API_KEY=placeholder_value\n", id="placeholder"),
+        pytest.param(
+            "template.env.example", "OPENAI_API_KEY=placeholder_value\n", id="placeholder"
+        ),
         pytest.param("template.env.example", "GOOGLE_API_KEY=your-api-key-here\n", id="your-key"),
         pytest.param("template.env.example", 'password="a_secure_password"\n', id="generic-pw"),
         pytest.param("source.py", "password = config.password\n", id="attribute"),
@@ -885,12 +887,16 @@ def test_rejected_secret_blob_is_not_promoted_to_sidecar(tmp_path: Path) -> None
     result = _checkpoint(run_root)
 
     git_dir = checkpoint_git_dir(run_root, ".agentic_history")
-    object_id = subprocess.run(
-        ["git", f"--git-dir={git_dir}", "hash-object", "--stdin"],
-        input=secret,
-        capture_output=True,
-        check=True,
-    ).stdout.decode().strip()
+    object_id = (
+        subprocess.run(
+            ["git", f"--git-dir={git_dir}", "hash-object", "--stdin"],
+            input=secret,
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
     present = subprocess.run(
         ["git", f"--git-dir={git_dir}", "cat-file", "-e", object_id],
         capture_output=True,
@@ -914,8 +920,19 @@ def test_nested_repositories_are_excluded_without_degrading_or_size_reports(
     (nested / "data.txt").write_text("nested\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(nested), "add", "data.txt"], check=True)
     subprocess.run(
-        ["git", "-C", str(nested), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
-         "commit", "-q", "-m", "nested"],
+        [
+            "git",
+            "-C",
+            str(nested),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "nested",
+        ],
         check=True,
     )
 
@@ -1178,7 +1195,9 @@ def test_total_size_cap_is_checked_before_git_and_against_the_staged_tree(
 
     assert result.status == "degraded"
     assert result.error == "checkpoint staged byte budget exceeded (8 bytes)"
-    assert not checkpoint_git_dir(run_root, ".agentic_history").joinpath("refs/heads/master").exists()
+    assert (
+        not checkpoint_git_dir(run_root, ".agentic_history").joinpath("refs/heads/master").exists()
+    )
 
 
 def test_total_size_cap_excludes_per_file_skips_and_sensitive_paths(tmp_path: Path) -> None:

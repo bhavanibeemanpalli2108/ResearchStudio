@@ -1,5 +1,32 @@
 # Development checkpoint
 
+## Authorized GH013 history correction — 2026-11-23
+
+The owner authorized a targeted rewrite after GitHub rejected a synthetic Slack
+redaction fixture in upstream history. A verified external bundle and full Git
+metadata copy preserve the original 16 commits and all release objects. Cleaned
+history changes only that fixture in historical trees, preserves the destination
+LICENSE commit verbatim and retargets all three annotated tags with their names,
+descriptions and tagger dates intact. Two invalidated upstream merge signatures
+were removed from cleaned objects; originals remain in the recovery copy.
+
+The test still exercises complete credential-shaped input against the unchanged
+checkpoint scanner. No GitHub bypass or scanner suppression was added. A final
+tip-only formatting cleanup is AST-identical. Historical research evidence,
+application code and budgets remain unchanged. Private backup/Codex refs are not
+selected for publication. Full old/new commit and release mappings, verification
+gates and signature details: [GH013 recovery report](GH013_HISTORY_REPAIR.md).
+Older entries below retain their original commit references intentionally.
+Post-rewrite results: checkpoint/redaction suites 194 passed; native platform/
+CLI/Inspector 347 passed with four real Docker cases excluded; frontend 21 passed.
+Ruff, formatting, Linux-target mypy, TypeScript/build/Prettier and full Git
+integrity pass. Main and the three release tags have zero original Slack-value
+or Slack-pattern hits and zero unreviewed/configured credential matches. Other
+matches remain reviewed synthetic redaction fixtures (16 across reachable blob
+versions after tip formatting, including three duplicate fixture values). Both retained database
+snapshots and all 121 artifact files remain unchanged. Publication proceeds only
+through a normal non-force push with GitHub protection still enabled.
+
 ## GitHub publication preparation — 2026-11-23
 
 Destination: `https://github.com/bhavanibeemanpalli2108/ResearchStudio.git`.
