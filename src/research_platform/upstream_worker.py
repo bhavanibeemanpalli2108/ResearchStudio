@@ -1255,6 +1255,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8801)
+    parser.add_argument("--tls-cert", help="Operator-provisioned worker TLS certificate")
+    parser.add_argument("--tls-key", help="Operator-provisioned worker TLS private key")
     parser.add_argument(
         "--check",
         action="store_true",
@@ -1266,6 +1268,8 @@ def main() -> None:
         help="Offline: verify empty research cgroup and dedicated daemon; never resume",
     )
     args = parser.parse_args()
+    if bool(args.tls_cert) != bool(args.tls_key):
+        parser.error("Worker TLS requires both --tls-cert and --tls-key")
     settings = WorkerSettings.from_env()
     if args.check and args.recover:
         parser.error("--check and --recover are mutually exclusive")
@@ -1288,6 +1292,9 @@ def main() -> None:
                     port=args.port,
                     limit_concurrency=16,
                     access_log=False,
+                    proxy_headers=False,
+                    ssl_certfile=args.tls_cert,
+                    ssl_keyfile=args.tls_key,
                 )
     except (OSError, RuntimeError, ValueError, HTTPException):
         print(

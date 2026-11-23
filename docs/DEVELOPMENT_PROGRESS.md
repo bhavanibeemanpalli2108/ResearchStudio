@@ -1,5 +1,69 @@
 # Development checkpoint
 
+## GitHub publication preparation — 2026-11-23
+
+Destination: `https://github.com/bhavanibeemanpalli2108/ResearchStudio.git`.
+Fetched GitHub main `77bddd3289e2c99e0a2d6df09fbd4180a30c2ad8` is already an
+ancestor of local main; no unrelated-history merge or force push is required.
+Phase 1 commit e8b9e27 and the three native release tags remain preserved.
+
+Pre-publication inspection scanned all 15 currently reachable commits and 756
+unique blobs (approximately 19 MB), commit/tag metadata and pending source/docs.
+No private/runtime paths or configured secret values were found. Fourteen
+credential-pattern matches and nine assignment candidates were reviewed as
+synthetic upstream redaction-test fixtures (ordered canary strings, dummy proxy
+credentials and an incomplete dummy private-key payload), not genuine secrets.
+No credential validation/provider request was made. No established secret scanner
+was installed in Windows or WSL; this used a local full-blob audit and structural
+review, without printing credential values or installing tools. No automated
+scanner can guarantee absence of every possible unknown secret format.
+
+Strengthened Git exclusions for private `*.env`, key material, SQLite sidecars
+and personal credential/config files. Source templates remain tracked. Actual
+research state, caches, runtime outputs and private audit reports stay local and
+ignored. Fresh WSL platform/CLI/Inspector checks: 347 passed, four real-Docker
+cases excluded; Ruff lint/format and Linux-target mypy pass. Windows's previously
+reported SQLAlchemy App Control blocker was not bypassed. Publication is attempted
+only after reviewed staging and a final history audit; this entry records
+preparation, not a claim that an unverified push succeeded.
+
+## Original engine Phase 2 deployment readiness — 2026-11-23
+
+Reviewed and committed exactly 14 Phase 1 source/test/template/doc files as
+`e8b9e27531fa4f15ee6f07fa1585dfeac0861742`. Configured-secret/runtime exclusions
+and staged diff checks passed; all release tags remain unchanged. Fresh WSL
+platform/CLI regression: 344 passed/4 genuine-Docker cases deselected. Both
+retained database snapshots and 121 artifact files remain unchanged.
+
+Read-only hardware check: Windows available RAM approximately 9.59–10.81 GiB,
+latest commit headroom approximately 10.82 GiB; WSL memory is overlapping, not
+additional. Native nested KVM exposure exists but current user lacks kvm GID991
+access (EACCES). QEMU is absent. Desktop is stopped/unreachable; it was not
+restarted. CPU/disk are adequate for a conditional 4-vCPU/6-GiB/64-GiB lab, but
+normal-workload memory and actual accelerated KVM must pass before provisioning.
+
+Added only optional TLS certificate/key arguments to the existing worker launcher,
+retaining the exclusive controller lock; three offline tests cover TLS forwarding,
+disabled campaigns and incomplete configuration refusal. Targeted WSL checks now
+97 passed. No certificates, service configuration or sockets were created by these
+launcher tests. No native frontend/workflow/provider change was made.
+Final WSL full platform/CLI/Inspector suite after TLS correction: 347 passed,
+4 genuine-Docker cases deselected. Ruff lint/format (56 files), mypy (37 sources)
+and Git whitespace checks pass. The runbook mock gateway block was validated with
+an in-process ASGI boundary: exactly 20 dispatches/rows, request 21 HTTP403,
+duplicate after restart HTTP409, no real sockets/provider/VM traffic. Packet/TLS
+and deployed recovery acceptance remain pending.
+
+Current Windows Python regression collection is blocked by Application Control
+rejecting SQLAlchemy's `_row_cy` DLL. No policy bypass or package reinstall was
+attempted. Prior Windows test results are historical; current Linux verification
+remains passing. No host/VM/provider changes or original campaigns occurred.
+ISSUE-01/02 remain partial and original web launch/controls remain HTTP 409.
+
+Resource facts, exact next approval, risks and rollback:
+[Phase 2 readiness](ORIGINAL_PHASE_2_READINESS.md). Ordered mock-first deployment
+and security checks: [acceptance runbook](../deploy/upstream-worker/ACCEPTANCE.md).
+
 ## Original engine offline controller lifecycle — 2026-11-22
 
 Added the default-off original controller using existing Run/Job/GatewayGrant/

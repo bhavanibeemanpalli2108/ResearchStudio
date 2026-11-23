@@ -65,6 +65,28 @@ results/
 
 # Other files
 .env
+*.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+.git-credentials
+.gitconfig
+.wslconfig
+.npmrc
+.pypirc
+.ssh/
+.aws/
+.azure/
+credentials.json
+token.json
+tokens.json
 output/
 scratch/
 

@@ -1,5 +1,12 @@
 # Dedicated original worker: Phase 1 deployment
 
+Current 2026-11-23 resource gates, separate approvals and ordered packet/TLS/
+accounting/cleanup procedures: [Phase 2 acceptance](ACCEPTANCE.md) and
+[readiness assessment](../../docs/ORIGINAL_PHASE_2_READINESS.md). They supersede
+the older hardware snapshot below; nothing has been provisioned. The trusted
+OriginalController/gateway stay outside this guest; "controller" below refers
+to the disposable worker service process, not the trusted ledger coordinator.
+
 Status: repository preparation, not an installed or verified VM. Nothing in this
 directory is an instruction to enable original campaigns. ISSUE-02 remains open;
 ISSUE-03 web launch must continue to return HTTP 409. Do not supply real provider
@@ -82,8 +89,8 @@ guest, or use QEMU monitor `system_powerdown`; avoid forced kills and disk remov
 First confirm the dedicated guest: `uname -r` is not Microsoft/WSL, PID 1 is
 systemd, and no Desktop socket/context or workstation mounts are present.
 
-1. Stage the current reviewed **working-tree source**, not merely `git archive
-   HEAD` (the current platform code includes uncommitted files). Include `src`,
+1. Stage a reviewed, pinned source commit (Phase 1 is now committed; include the
+   separately reviewed Phase 2 TLS correction before a TLS deployment). Include `src`,
    `configs`, required `apps` backend packages, examples, these deployment files,
    `pyproject.toml`, `uv.lock`, README and license. Explicitly exclude `.env`, any
    private `*.env`, `.git`, `.venv`, `node_modules`, build outputs, results and

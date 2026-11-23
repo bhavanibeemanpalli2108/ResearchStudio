@@ -1,5 +1,12 @@
 # Original-engine model budget gateway — offline implementation
 
+Current deployment sequence: [Phase 2 acceptance procedures](ACCEPTANCE.md).
+The trusted production writers are co-located on one Linux host/local SQLite;
+initial packet tests use a NEW mock-only acceptance database, never the running
+Windows research database. No Windows/WSL dual-writer sharing or provider key
+provisioning is implied. The prepared forwarder and private TLS trust are not
+installed; actual guest packet/TLS acceptance is still pending.
+
 This is prepared configuration, not a deployed or approved VM/network. The gateway
 has passed temporary-database and local mock-CLI tests. Direct provider bypass is
 **not** claimed prevented until actual VM packet tests pass. Original campaigns

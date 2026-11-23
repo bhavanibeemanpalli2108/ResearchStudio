@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
@@ -507,3 +508,51 @@ def test_scoped_credential_symlink_and_expired_worker_resume_rejected(configured
     monkeypatch.setattr(worker, "capabilities", lambda: {"ready": True})
     with pytest.raises(HTTPException, match="Scoped execution window expired"):
         worker.submit(payload, resume=True)
+
+
+def test_optional_tls_launch_keeps_worker_lock_and_disabled_campaigns(configured, monkeypatch):
+    import uvicorn
+
+    settings, worker, _ = configured
+    entered = []
+    launched = []
+
+    @contextmanager
+    def locked(config):
+        assert config == settings
+        entered.append(True)
+        yield
+        entered.pop()
+
+    def serve(app, **kwargs):
+        assert entered == [True]
+        assert app.state.worker is worker
+        assert not worker.settings.campaigns_enabled
+        launched.append(kwargs)
+
+    monkeypatch.setattr(module, "controller_lock", locked)
+    monkeypatch.setattr(module.WorkerSettings, "from_env", classmethod(lambda cls: settings))
+    monkeypatch.setattr(module, "UpstreamWorker", lambda config: worker)
+    monkeypatch.setattr(uvicorn, "run", serve)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["worker", "--tls-cert", "/private/fixture.crt", "--tls-key", "/private/fixture.key"],
+    )
+    module.main()
+    assert not entered
+    assert launched[0]["ssl_certfile"] == "/private/fixture.crt"
+    assert launched[0]["ssl_keyfile"] == "/private/fixture.key"
+    assert launched[0]["host"] == "127.0.0.1"
+    assert launched[0]["access_log"] is False and launched[0]["proxy_headers"] is False
+
+
+@pytest.mark.parametrize("flag", ["--tls-cert", "--tls-key"])
+def test_partial_worker_tls_configuration_fails_before_serving(monkeypatch, flag):
+    monkeypatch.setattr(sys, "argv", ["worker", flag, "/private/fixture"])
+    monkeypatch.setattr(
+        module, "controller_lock", lambda settings: pytest.fail("Partial TLS entered worker lock")
+    )
+    with pytest.raises(SystemExit) as error:
+        module.main()
+    assert error.value.code == 2
